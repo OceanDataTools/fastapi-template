@@ -10,7 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.db.session import get_async_session
 from app.models import APIKey, APIKeyPermission, User
-from app.schemas import APIKeyCreateSchema, APIKeyReadSchema, APIKeyRevealSchema
+from app.schemas import (
+    APIKeyCreateSchema,
+    APIKeyReadPermissionSchema,
+    APIKeyReadSchema,
+    APIKeyRevealSchema,
+    APIKeyUpdateSchema,
+)
 from app.utils import cast_uuid, get_apikey_hash
 
 router = APIRouter(prefix="/api/v1/apikeys", tags=["API Keys"])
@@ -35,7 +41,12 @@ async def create_apikey(
     raw_key = secrets.token_urlsafe(32)
     key_hash = get_apikey_hash(raw_key)
 
-    apikey = APIKey(user_id=user.id, key_hash=key_hash, name=payload.name)
+    apikey = APIKey(
+        user_id=user.id,
+        key_hash=key_hash,
+        name=payload.name,
+        expires_at=payload.expires_at,
+    )
     session.add(apikey)
     await session.flush()  # assigns apikey.id
     await session.refresh(apikey)  # loads DB-generated fields
@@ -94,46 +105,65 @@ async def revoke_apikey(
     return key
 
 
-@router.post("/{key_id}/reissue", response_model=APIKeyReadSchema)
-async def reissue_apikey(
+@router.patch("/{key_id}", response_model=APIKeyReadSchema)
+async def update_apikey(
     key_id: UUID,
+    payload: APIKeyUpdateSchema,
     session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(get_current_user),
+    user=Depends(get_current_user),
 ):
+    """
+    Update an API key's expiration date. Key must exist and belong to the current user.
+    """
     user_id = cast_uuid(user.id)
 
+    # Fetch the key
     result = await session.execute(
         select(APIKey).filter_by(id=cast_uuid(key_id), user_id=user_id)
     )
-    old_key = result.scalar_one_or_none()
+    key = result.scalar_one_or_none()
 
-    if not old_key:
+    if not key:
         raise HTTPException(status_code=404, detail="API key not found")
 
-    if not old_key.revoked:
-        raise HTTPException(
-            status_code=400, detail="Key must be revoked before reissuing"
-        )
+    if key.revoked:
+        raise HTTPException(status_code=400, detail="Cannot update a revoked key")
 
-    raw_key = secrets.token_urlsafe(32)
-    key_hash = get_apikey_hash(raw_key)
-
-    new_key = APIKey(
-        user_id=user_id,
-        key_hash=key_hash,
-        name=old_key.name,
-        allowed_routes=[
-            APIKeyPermission(route=perm.route, method=perm.method)
-            for perm in old_key.allowed_routes
-        ],
-    )
-    session.add(new_key)
+    # Update expires_at
+    key.expires_at = payload.expires_at
+    session.add(key)
     await session.commit()
-    await session.refresh(new_key)
+    await session.refresh(key)
 
     return {
-        "id": new_key.id,
-        "name": new_key.name,
-        "key": raw_key,  # only shown once
-        "created_at": new_key.created_at,
+        "id": key.id,
+        "name": key.name,
+        "created_at": key.created_at,
+        "last_used": key.last_used,
+        "expires_at": key.expires_at,
+        "usage_count": key.usage_count,
+        "revoked": key.revoked,
     }
+
+
+@router.get("/{key_id}/routes", response_model=list[APIKeyReadPermissionSchema])
+async def get_apikey_routes(
+    key_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    user=Depends(get_current_user),
+):
+    # Ensure the API key exists and belongs to the current user
+    result = await session.execute(
+        select(APIKey.id).filter_by(id=cast_uuid(key_id), user_id=cast_uuid(user.id))
+    )
+    apikey_id = result.scalar_one_or_none()
+    if not apikey_id:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    # Query the permissions directly
+    permissions_result = await session.execute(
+        select(APIKeyPermission).filter_by(apikey_id=cast_uuid(key_id))
+    )
+    permissions = permissions_result.scalars().all()
+
+    return permissions

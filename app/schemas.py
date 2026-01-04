@@ -96,7 +96,7 @@ class ForgotPasswordSchema(BaseModel):
 
 
 # --------------- API Keys --------------- #
-class APIKeyPermissionSchema(BaseModel):
+class APIKeyReadPermissionSchema(BaseModel):
     route: str
     method: str
 
@@ -107,7 +107,8 @@ class APIKeyPermissionSchema(BaseModel):
 
 class APIKeyCreateSchema(BaseModel):
     name: Optional[str]
-    permissions: List[APIKeyPermissionSchema]
+    permissions: List[APIKeyReadPermissionSchema]
+    expires_at: Optional[datetime]
 
 
 class APIKeyReadSchema(BaseModel):
@@ -115,9 +116,9 @@ class APIKeyReadSchema(BaseModel):
     name: Optional[str]
     created_at: datetime
     last_used: Optional[datetime]
+    expires_at: Optional[datetime]
     usage_count: int
     revoked: bool
-    # permissions: List[APIKeyPermissionSchema]
 
     model_config = {
         "from_attributes": True,  # enables ORM object parsing in Pydantic v2
@@ -126,3 +127,7 @@ class APIKeyReadSchema(BaseModel):
 
 class APIKeyRevealSchema(APIKeyReadSchema):
     unhashed_key: str
+
+
+class APIKeyUpdateSchema(BaseModel):
+    expires_at: Optional[datetime]

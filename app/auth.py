@@ -146,7 +146,7 @@ def apikey_required(route: str | None = None, method: str | None = None):
             raise HTTPException(status_code=401, detail="Missing API key")
 
         apikey = await get_apikey_by_header(session, apikey_header)
-        if not apikey or apikey.revoked:
+        if not apikey or not apikey.is_active:
             raise HTTPException(status_code=403, detail="Invalid or revoked API key")
 
         route_path = route or request.scope["route"].path
@@ -204,7 +204,7 @@ def apikey_or_jwt_required(
         # --- API key path ---
         if apikey_header:
             apikey = await get_apikey_by_header(session, apikey_header)
-            if not apikey or apikey.revoked:
+            if not apikey or not apikey.is_active:
                 raise HTTPException(
                     status_code=403, detail="Invalid or revoked API key"
                 )

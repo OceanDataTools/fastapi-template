@@ -74,7 +74,6 @@ class User(Base):
     roles: Mapped[list[Role]] = relationship(
         "Role", secondary=user_roles, back_populates="users", lazy="selectin"
     )
-
     apikeys: Mapped[list["APIKey"]] = relationship(
         "APIKey", back_populates="user", cascade="all, delete-orphan"
     )
@@ -107,6 +106,7 @@ class APIKey(Base):
     key_hash: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     name: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_used: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     usage_count: Mapped[int] = mapped_column(Integer, default=0)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -115,6 +115,16 @@ class APIKey(Base):
     allowed_routes: Mapped[list["APIKeyPermission"]] = relationship(
         "APIKeyPermission", back_populates="api_key", cascade="all, delete-orphan"
     )
+
+    @property
+    def is_expired(self) -> bool:
+        """Returns True if the key is past expiration."""
+        return self.expires_at is not None and datetime.utcnow() >= self.expires_at
+
+    @property
+    def is_active(self) -> bool:
+        """True if not revoked and not expired."""
+        return not self.revoked and not self.is_expired
 
 
 # -------------------

@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     default_admin_username: Optional[str] = "admin"
     default_admin_password: Optional[str] = "admin"
     default_admin_fullname: Optional[str] = "Administrator"
-    default_admin_email: Optional[str] = "odt_project_admin@oceandatatool.org"
+    default_admin_email: Optional[str] = "odt_project_admin@oceandatatools.org"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
