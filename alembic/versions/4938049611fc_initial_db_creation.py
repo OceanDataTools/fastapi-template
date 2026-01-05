@@ -103,7 +103,7 @@ def upgrade() -> None:
 
     # Hash admin password
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    hashed_password = pwd_context.hash(settings.default_admin_poassword)
+    hashed_password = pwd_context.hash(settings.default_admin_password)
 
     # Insert admin user
     conn.execute(
