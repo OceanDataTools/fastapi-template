@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "odt-fastapi-backend"
+name = "OpenRVDAS"
 version = "1.0.0"
-description = "ODT backend server built with TimescaleDB (or SQLite) and FastAPI"
+description = "FastAPI-based API for OpenRVDAS"
 authors = ["Webb Pinner <webbpinner@gmail.com>"]
 license = "MIT"
 readme = "README.md"
