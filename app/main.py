@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
 
-from app.api import apikeys, auth, examples, profile, users
+from app.api import apikeys, auth, cruise, examples, loggers, logger_configs, modes, profile, users
 from app.config import settings
 from app.deps import get_current_user
 
@@ -84,6 +84,12 @@ async def list_routes(current_user=Depends(get_current_user)):
 
 
 app.include_router(auth.router)
-app.include_router(examples.router)
+# app.include_router(examples.router)
 app.include_router(profile.router)
 app.include_router(users.router)
+
+# OpenRVDAS routes
+app.include_router(cruise.router)
+app.include_router(modes.router)
+app.include_router(loggers.router)
+app.include_router(logger_configs.router)
