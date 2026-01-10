@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
 
-from app.api import apikeys, auth, examples, profile, users
+from app.api import apikeys, auth, cruise, examples, loggers, logger_configs, modes, profile, users
 from app.config import settings
 from app.deps import get_current_user
 
@@ -39,21 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers registered on the app. list_routes() walks these rather than
-# app.routes: from FastAPI 0.137 on, include_router() adds a single
-# _IncludedRouter object to app.routes instead of the individual APIRoutes.
-# Each router sets its full prefix in APIRouter(prefix=...) and includes no
-# sub-routers, so router.routes already carries the complete paths.
-INCLUDED_ROUTERS = [
-    apikeys.router,
-    auth.router,
-    examples.router,
-    profile.router,
-    users.router,
-]
-
-for _router in INCLUDED_ROUTERS:
-    app.include_router(_router)
+app.include_router(apikeys.router)
 
 
 @app.get("/api/v1/apikeys/routes", tags=["API Keys"])
@@ -72,7 +58,7 @@ async def list_routes(current_user=Depends(get_current_user)):
         return False
 
     routes = []
-    for route in (r for router in INCLUDED_ROUTERS for r in router.routes):
+    for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
 
@@ -95,3 +81,15 @@ async def list_routes(current_user=Depends(get_current_user)):
         )
 
     return routes
+
+
+app.include_router(auth.router)
+# app.include_router(examples.router)
+app.include_router(profile.router)
+app.include_router(users.router)
+
+# OpenRVDAS routes
+app.include_router(cruise.router)
+app.include_router(modes.router)
+app.include_router(loggers.router)
+app.include_router(logger_configs.router)
