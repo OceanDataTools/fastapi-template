@@ -6,13 +6,8 @@ from typing import List, Optional
 from sqlalchemy import (
     Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, func, Index
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-
-# -------------------
-# Declarative base
-# -------------------
-class Base(DeclarativeBase):
-    pass
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.models import Base
 
 # -------------------
 # Association table: LoggerConfig <-> Mode
@@ -28,7 +23,7 @@ logger_config_modes = Table(
 # Cruise (metadata only)
 # -------------------
 class Cruise(Base):
-    __tablename__ = "cruises"
+    __tablename__ = "cruise"
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
     start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
