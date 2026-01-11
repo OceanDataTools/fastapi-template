@@ -127,9 +127,10 @@ def jwt_required(required_roles: Optional[Tuple[str, ...]] = None):
         if not user.roles or len(user.roles) == 0:
             raise HTTPException(status_code=403, detail="User has no roles assigned")
 
-        user_role_names = {role.name for role in user.roles}
-        if not user_role_names.intersection([required_roles]):
-            raise HTTPException(status_code=403, detail="Insufficient role")
+        if required_roles:
+            user_role_names = {role.name for role in user.roles}
+            if not user_role_names.intersection(required_roles):
+                raise HTTPException(status_code=403, detail="Insufficient role")
 
         return user
 
@@ -190,14 +191,15 @@ def apikey_or_jwt_required(
 
         # --- JWT path ---
         if user:
-            if not user.roles or len(user.roles) == 0:
+            if not user.roles:
                 raise HTTPException(
                     status_code=403, detail="User has no roles assigned"
                 )
 
-            user_role_names = {role.name for role in user.roles}
-            if not user_role_names.intersection([required_roles]):
-                raise HTTPException(status_code=403, detail="Insufficient role")
+            if required_roles:
+                user_role_names = {role.name for role in user.roles}
+                if not user_role_names.intersection(required_roles):
+                    raise HTTPException(status_code=403, detail="Insufficient role")
 
             return {"auth_type": "jwt", "principal": user}
 
