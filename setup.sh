@@ -38,7 +38,7 @@ if [ ! -f ".env" ]; then
 ###############################################################################
 # FOR SQLITE BACKED PROJECTS
 ###############################################################################
-DATABASE_URL=sqlite+aiosqlite:///./db.sqlite3
+DATABASE_URL=sqlite+aiosqlite:///$SCRIPT_DIR/db.sqlite3
 
 ###############################################################################
 # Default admin account - DELETE AFTER DB INITIALIZATION

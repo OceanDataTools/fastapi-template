@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Optional, List
 
-from pydantic import UUID4, BaseModel, Extra, Field
+from pydantic import BaseModel, Extra, Field, field_serializer, model_serializer, computed_field
 
 
 # -------------------
@@ -12,8 +12,6 @@ class CruiseBase(BaseModel):
     start: Optional[datetime] = Field(None, description="Start datetime of the Cruise")
     end: Optional[datetime] = Field(None, description="End datetime of the Cruise")
     config_filename: Optional[str] = Field(None, description="Optional config filename")
-    config_text: Optional[str] = Field(None, description="Optional config text")
-
 
 class CruiseCreate(CruiseBase):
     cruise_id: str = Field(..., description="Identifier for the Cruise")
@@ -28,49 +26,15 @@ class CruiseRead(CruiseBase):
 
 
 # -------------------
-# Logger
+# Refs
 # -------------------
-class LoggerBase(BaseModel):
-    name: str = Field(..., max_length=255)
-    description: Optional[str] = None
-
-
-class LoggerCreate(LoggerBase):
-    pass
-
-
-class LoggerUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-
-
-class LoggerOut(LoggerBase):
-    id: UUID4
+class ConfigRef(BaseModel):
+    id: str
 
     model_config = {"from_attributes": True, "extra": Extra.ignore}
 
-
-# -------------------
-# Logger Config
-# -------------------
-class LoggerConfigBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-    logger_id: Optional[UUID4] = None
-
-
-class LoggerConfigCreate(LoggerConfigBase):
-    pass
-
-
-class LoggerConfigUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    logger_id: Optional[UUID4] = None
-
-
-class LoggerConfigOut(LoggerConfigBase):
-    id: UUID4
+class LoggerRef(BaseModel):
+    id: str
 
     model_config = {"from_attributes": True, "extra": Extra.ignore}
 
@@ -79,85 +43,85 @@ class LoggerConfigOut(LoggerConfigBase):
 # Mode
 # -------------------
 class ModeBase(BaseModel):
-    name: str = Field(..., max_length=255)
-
+    id: str = Field(..., max_length=255)
 
 class ModeCreate(ModeBase):
-    logger_config_ids: List[UUID4] = []
-    is_default: bool | None = None
+    config_ids: List[str] = []
+    default: bool | None = None
 
 class ModeUpdate(BaseModel):
-    name: str | None = None
-    logger_config_ids: List[UUID4] | None = None
-    is_active: bool | None = None
-    is_default: bool | None = None
-
+    config_ids: List[str] | None = None
+    active: bool | None = None
+    default: bool | None = None
 
 class ModeOut(ModeBase):
-    id: UUID4
-    is_active: bool
-    is_default: bool
-    logger_config_ids: List[UUID4]
+    id: str
+    active: bool
+    default: bool
+    configs: List[ConfigRef] = Field(default_factory=list)
 
     model_config = {"from_attributes": True, "extra": Extra.ignore}
+
+    @field_serializer("configs")
+    def serialize_configs(self, v, info):
+        return [c.id for c in v]
 
 
 # -------------------
 # Loggers
 # -------------------
 class LoggerBase(BaseModel):
-    name: Optional[str] = Field(None, max_length=255)
-
+    id: str = Field(None, max_length=255)
 
 class LoggerCreate(LoggerBase):
     pass
 
-
 class LoggerUpdate(LoggerBase):
     pass
 
-
-class LoggerConfigRef(BaseModel):
+class LoggerOut(BaseModel):
     id: str
-    name: Optional[str]
+    configs: List[ConfigRef] = Field(default_factory=list)
+    active_config: Optional[str] = None
 
     model_config = {"from_attributes": True, "extra": Extra.ignore}
 
+    # ORM Config -> string IDs
+    @field_serializer("configs")
+    def serialize_configs(self, v, info):
+        return [c.id for c in v]
 
-class LoggerOut(LoggerBase):
-    id: str
-    configs: List[LoggerConfigRef] = []
-
-    model_config = {"from_attributes": True, "extra": Extra.ignore}
+    # Compute from LoggerConfigState.running
+    @field_serializer("active_config")
+    def serialize_active_config(self, v, info):
+        for state in getattr(self, "config_states", []):
+            if state.running:
+                return state.config_id
+        return None
 
 
 # -------------------
-# Logger Configs
+# Configs
 # -------------------
-class LoggerConfigBase(BaseModel):
-    name: Optional[str] = Field(None, max_length=255)
+class ConfigBase(BaseModel):
+    id: Optional[str] = Field(None, max_length=255)
     config_json: Optional[str]
-    enabled: Optional[bool] = True
     logger_id: Optional[str]
 
-
-class LoggerConfigCreate(LoggerConfigBase):
+class ConfigCreate(ConfigBase):
     config_json: str
 
-
-class LoggerConfigUpdate(LoggerConfigBase):
+class ConfigUpdate(ConfigBase):
     pass
 
-
-class LoggerRef(BaseModel):
-    id: str
-    name: Optional[str]
+class ConfigOut(ConfigBase):
 
     model_config = {"from_attributes": True, "extra": Extra.ignore}
 
-
-class LoggerConfigOut(LoggerConfigBase):
-    id: str
-    logger: Optional[LoggerRef]
-
-    model_config = {"from_attributes": True, "extra": Extra.ignore}
+    @computed_field
+    @property
+    def active(self) -> bool:
+        for state in getattr(self, "states", []):
+            if state.running:
+                return True
+        return False
