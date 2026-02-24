@@ -1,8 +1,8 @@
-"""added openrvdas-related tables
+"""create openrvdas-related tables
 
-Revision ID: 3b364970e98b
+Revision ID: 4b42896a6cb0
 Revises: 57dbf607eba2
-Create Date: 2026-01-11 07:37:54.292619
+Create Date: 2026-01-15 13:15:59.650906
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '3b364970e98b'
+revision = '4b42896a6cb0'
 down_revision = '57dbf607eba2'
 branch_labels = None
 depends_on = None
@@ -46,48 +46,43 @@ def upgrade() -> None:
     op.create_index(op.f('ix_log_messages_timestamp'), 'log_messages', ['timestamp'], unique=False)
     op.create_index(op.f('ix_log_messages_user'), 'log_messages', ['user'], unique=False)
     op.create_table('loggers',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('name', sa.String(length=255), nullable=False),
+    sa.Column('id', sa.String(length=255), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_loggers_name'), 'loggers', ['name'], unique=True)
     op.create_table('modes',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('name', sa.String(length=255), nullable=False),
+    sa.Column('id', sa.String(length=255), nullable=False),
     sa.Column('active', sa.Boolean(), nullable=False),
     sa.Column('default', sa.Boolean(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_modes_name'), 'modes', ['name'], unique=True)
-    op.create_table('logger_configs',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('name', sa.String(length=255), nullable=False),
-    sa.Column('logger_id', sa.String(length=36), nullable=True),
+    op.create_table('configs',
+    sa.Column('id', sa.String(length=255), nullable=False),
+    sa.Column('logger_id', sa.String(length=255), nullable=True),
     sa.Column('current_config', sa.Boolean(), nullable=False),
     sa.Column('config_json', sa.Text(), nullable=False),
     sa.Column('enabled', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['logger_id'], ['loggers.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_logger_configs_logger_id'), 'logger_configs', ['logger_id'], unique=False)
-    op.create_index(op.f('ix_logger_configs_name'), 'logger_configs', ['name'], unique=True)
+    op.create_index(op.f('ix_configs_logger_id'), 'configs', ['logger_id'], unique=False)
     op.create_table('logger_config_modes',
-    sa.Column('logger_config_id', sa.String(length=36), nullable=True),
-    sa.Column('mode_id', sa.String(length=36), nullable=True),
-    sa.ForeignKeyConstraint(['logger_config_id'], ['logger_configs.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['mode_id'], ['modes.id'], ondelete='CASCADE')
+    sa.Column('config_id', sa.String(length=255), nullable=False),
+    sa.Column('mode_id', sa.String(length=255), nullable=False),
+    sa.ForeignKeyConstraint(['config_id'], ['configs.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['mode_id'], ['modes.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('config_id', 'mode_id')
     )
     op.create_table('logger_config_states',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-    sa.Column('logger_id', sa.String(length=36), nullable=True),
-    sa.Column('config_id', sa.String(length=36), nullable=False),
+    sa.Column('logger_id', sa.String(length=255), nullable=True),
+    sa.Column('config_id', sa.String(length=255), nullable=False),
     sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('last_checked', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('running', sa.Boolean(), nullable=False),
     sa.Column('failed', sa.Boolean(), nullable=False),
     sa.Column('pid', sa.Integer(), nullable=False),
     sa.Column('errors', sa.Text(), nullable=False),
-    sa.ForeignKeyConstraint(['config_id'], ['logger_configs.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['config_id'], ['configs.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['logger_id'], ['loggers.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -106,12 +101,9 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_logger_config_states_config_id'), table_name='logger_config_states')
     op.drop_table('logger_config_states')
     op.drop_table('logger_config_modes')
-    op.drop_index(op.f('ix_logger_configs_name'), table_name='logger_configs')
-    op.drop_index(op.f('ix_logger_configs_logger_id'), table_name='logger_configs')
-    op.drop_table('logger_configs')
-    op.drop_index(op.f('ix_modes_name'), table_name='modes')
+    op.drop_index(op.f('ix_configs_logger_id'), table_name='configs')
+    op.drop_table('configs')
     op.drop_table('modes')
-    op.drop_index(op.f('ix_loggers_name'), table_name='loggers')
     op.drop_table('loggers')
     op.drop_index(op.f('ix_log_messages_user'), table_name='log_messages')
     op.drop_index(op.f('ix_log_messages_timestamp'), table_name='log_messages')
