@@ -1,288 +1,384 @@
-from typing import List, Optional
+import copy
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 
-from app.models_openrvdas import Mode, LoggerConfig
-
-
-async def list_modes(session: AsyncSession) -> List[Mode]:
-    result = await session.execute(
-        select(Mode)
-        .options(selectinload(Mode.logger_configs))
-        .order_by(Mode.name)
-    )
-    return result.scalars().all()
+from app.models_openrvdas import Mode, Config
+from app.db.base import CachedAsyncCRUDBase, CacheKey
+from app.db.configs import ConfigCRUD
+from app.db.loggers import LoggerCRUD
 
 
-async def get_mode(session: AsyncSession, mode_id: str) -> Optional[Mode]:
-    result = await session.execute(
-        select(Mode)
-        .options(selectinload(Mode.logger_configs))
-        .where(Mode.id == mode_id)
-    )
-    return result.scalar_one_or_none()
+class ModeCRUD(CachedAsyncCRUDBase):
+    """CRUD for Mode objects with serialized caching.
 
+    Supports:
+    - Create, update, delete operations
+    - Read operations with optional config hydration
+    - Bulk hydration for configs and loggers
+    """
 
-async def get_mode_by_name(session: AsyncSession, name: str) -> Optional[Mode]:
-    result = await session.execute(
-        select(Mode).where(Mode.name == name)
-    )
-    return result.scalar_one_or_none()
+    def __init__(self, config_crud: ConfigCRUD, logger_crud: LoggerCRUD):
+        super().__init__()
+        self.config_crud = config_crud
+        self.logger_crud = logger_crud
 
+    # ---------- cache keys ----------
 
-async def get_active_mode(session: AsyncSession) -> Optional[Mode]:
-    result = await session.execute(select(Mode).where(Mode.is_active.is_(True)))
-    return result.scalar_one_or_none()
+    def _key_by_id(self, mode_id: str) -> CacheKey:
+        return ("mode", "id", mode_id)
 
+    def _key_all(self) -> CacheKey:
+        return ("mode", "all")
 
-async def get_default_mode(session: AsyncSession) -> Optional[Mode]:
-    result = await session.execute(select(Mode).where(Mode.is_default.is_(True)))
-    return result.scalar_one_or_none()
+    def _key_active(self) -> CacheKey:
+        return ("mode", "active")
 
+    def _key_default(self) -> CacheKey:
+        return ("mode", "default")
 
-async def validate_mode_configs(session: AsyncSession, config_ids: List):
-    if not config_ids:
-        return
+    # ---------- Serialization ----------
 
-    result = await session.execute(
-        select(LoggerConfig).where(LoggerConfig.id.in_(config_ids))
-    )
-    configs = result.scalars().all()
+    def _serialize(self, mode: Mode) -> dict:
+        return {
+            "id": mode.id,
+            "active": mode.active,
+            "default": mode.default,
+            "configs": [
+                {"id": cfg.id, "logger_id": cfg.logger_id}
+                for cfg in mode.configs
+            ],
+        }
 
-    logger_map = {}
-    for cfg in configs:
-        if cfg.logger_id:
-            if cfg.logger_id in logger_map:
-                raise ValueError(
-                    "Mode cannot include multiple LoggerConfigs for the same Logger"
+    # ---------- Reads ----------
+
+    async def list_modes(
+        self,
+        session: AsyncSession,
+        hydrate_configs: bool = False,
+    ) -> List[dict]:
+        key = self._key_all()
+        cached = await self._get(key, session)
+
+        if cached is not None:
+            modes = copy.deepcopy(cached)
+        else:
+            result = await session.execute(
+                select(Mode).options(
+                    selectinload(Mode.configs)
                 )
-            logger_map[cfg.logger_id] = cfg.id
+            )
+            orm_modes = result.scalars().all()
+            modes = [self._serialize(m) for m in orm_modes]
+
+            serialized = [self._serialize(m) for m in orm_modes]
+
+            await self._set(key, copy.deepcopy(serialized))
+
+            for mode in serialized:
+                await self._set(self._key_by_id(mode["id"]), copy.deepcopy(mode))
+
+            modes = copy.deepcopy(serialized)
+
+        if hydrate_configs:
+            modes = await self.hydrate_modes_configs(session, modes)
+
+        return modes
+
+    async def get_mode(
+        self,
+        session: AsyncSession,
+        mode_id: str,
+        hydrate_configs: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        key = self._key_by_id(mode_id)
+        cached = await self._get(key, session)
+
+        if cached is not None:
+            mode = copy.deepcopy(cached)
+        else:
+            all_modes = await self.list_modes(session)
+            mode = next((m for m in all_modes if m["id"] == mode_id), None)
+            if mode is None:
+                raise NoResultFound(f"Mode {mode_id} not found")
+
+        if hydrate_configs:
+            mode = await self.hydrate_mode_configs(session, mode)
+
+        return mode
+
+    async def get_active_mode(
+        self,
+        session: AsyncSession,
+        hydrate_configs: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        cached = await self._get(self._key_active(), session)
+
+        if cached is not None:
+            mode = copy.deepcopy(cached)
+        else:
+            all_modes = await self.list_modes(session)
+            mode = next((m for m in all_modes if m["active"]), None)
+            if mode is None:
+                raise NoResultFound(f"Active mode not found")
+
+            await self._set(self._key_active(), copy.deepcopy(mode))
+
+        if hydrate_configs:
+            mode = await self.hydrate_mode_configs(session, mode)
+
+        return mode
+
+    async def get_default_mode(
+        self,
+        session: AsyncSession,
+        hydrate_configs: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        cached = await self._get(self._key_default(), session)
+
+        if cached is not None:
+            mode = copy.deepcopy(cached)
+        else:
+            all_modes = await self.list_modes(session)
+            mode = next((m for m in all_modes if m["default"]), None)
+            if mode is None:
+                raise NoResultFound(f"Default mode not found")
+
+            await self._set(self._key_default(), copy.deepcopy(mode))
 
 
-async def create_mode(
-    session: AsyncSession,
-    name: str,
-    logger_config_ids: List,
-    is_active: Optional[bool] = False,
-    is_default: Optional[bool] = False,
-) -> Mode:
-    await validate_mode_configs(session, logger_config_ids)
+        if hydrate_configs:
+            mode = await self.hydrate_mode_configs(session, mode)
 
-    result = await session.execute(
-        select(LoggerConfig).where(LoggerConfig.id.in_(logger_config_ids))
-    )
-    configs = result.scalars().all()
+        return mode
 
-    mode = Mode(name=name, logger_configs=configs, is_active=is_active, is_default=is_default)
-    session.add(mode)
-    await session.commit()
-    await session.refresh(mode)
-    return mode
+    # ---------- Writes ----------
 
+    async def create_mode(
+        self,
+        session: AsyncSession,
+        return_serialized: bool = True,  # optional flag
+        **data,
+    ) -> Optional[Dict[str, Any]]:
+        mode = Mode(**data)
+        session.add(mode)
+        await session.flush()
 
-async def update_mode(
-    session: AsyncSession,
-    mode_id,
-    *,
-    name: Optional[str] = None,
-    logger_config_ids: Optional[List] = None,
-    is_active: Optional[bool] = None,
-    is_default: Optional[bool] = None,
-) -> Mode:
-    result = await session.execute(select(Mode).where(Mode.id == mode_id))
-    mode = result.scalar_one_or_none()
+        serialized = self._serialize(mode)
 
-    if not mode:
-        raise NoResultFound("Mode not found")
+        await self._invalidate(self._key_all())
+        await self._set(self._key_by_id(mode.id), copy.deepcopy(serialized))
 
-    # Update name
-    if name is not None:
-        mode.name = name
+        return serialized if return_serialized else mode
 
-    # Update logger configs
-    if logger_config_ids is not None:
-        # Validate constraint: one config per logger
+    async def update_mode(
+        self,
+        session: AsyncSession,
+        mode_id: str,
+        return_serialized: bool = True,  # optional flag
+        **data,
+    ) -> Optional[Dict[str, Any]]:
         result = await session.execute(
-            select(LoggerConfig).where(LoggerConfig.id.in_(logger_config_ids))
+            select(Mode)
+            .options(selectinload(Mode.configs))
+            .where(Mode.id == mode_id)
         )
-        configs = result.scalars().all()
+        mode = result.scalar_one_or_none()
+        if not mode:
+            raise NoResultFound(f"Mode {mode_id} not found")
 
-        logger_ids = set()
-        for cfg in configs:
-            if cfg.logger_id:
-                if cfg.logger_id in logger_ids:
-                    raise ValueError(
-                        "Mode cannot include multiple LoggerConfigs for the same Logger"
-                    )
-                logger_ids.add(cfg.logger_id)
+        default = data.get("default")
+        if default is True:
 
-        mode.logger_configs = configs
+            # Clear existing default mode
+            result = await session.execute(
+                select(Mode).where(Mode.default.is_(True))
+            )
+            prev_default_mode = result.scalar_one_or_none()
+            if prev_default_mode:
+                prev_default_mode.default = False
+                await self._invalidate(self._key_by_id(prev_default_mode.id), self._key_default())
 
-    # Handle activation
-    if is_active is True:
-        await session.execute(update(Mode).values(is_active=False))
-        mode.is_active = True
-    elif is_active is False:
-        mode.is_active = False
+        for key, value in data.items():
+            if key not in ("config_ids",) and value is not None:
+                setattr(mode, key, value)
 
-    # Handle setting default
-    if is_default is True:
-        await session.execute(update(Mode).values(is_default=False))
-        mode.is_default = True
-    elif is_default is False:
-        mode.is_default = False
+        config_ids = data.get("config_ids")
+        if config_ids is not None:
+            configs = await self.config_crud.get_configs_by_ids(session, config_ids)
+            mode.configs = configs
 
+        await session.flush()
 
-    await session.commit()
-    await session.refresh(mode)
+        result = await session.execute(
+            select(Mode)
+            .options(selectinload(Mode.configs))
+            .where(Mode.id == mode_id)
+        )
+        mode = result.scalar_one()
 
-    return mode
+        serialized = self._serialize(mode)
+        await self._invalidate(self._key_all())
+        await self._set(self._key_by_id(mode.id), copy.deepcopy(serialized))
 
-async def delete_mode(session: AsyncSession, mode_id: str) -> None:
-    result = await session.execute(
-        select(Mode).where(Mode.id == mode_id)
-    )
-    mode = result.scalar_one_or_none()
+        if default is True:
+            await self._set(self._key_default(), copy.deepcopy(serialized))
 
-    if not mode:
-        raise NoResultFound(f"Mode with id {mode_id} not found")
+        return serialized if return_serialized else mode
 
-    if mode.is_active:
-        raise ValueError("Cannot delete the active mode")
+    async def delete_mode(
+        self,
+        session: AsyncSession,
+        mode_id: str,
+        return_serialized: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        result = await session.execute(
+            select(Mode)
+            .options(selectinload(Mode.configs))
+            .where(Mode.id == mode_id)
+        )
 
-    if mode.is_default:
-        raise ValueError("Cannot delete the default mode")
+        mode = result.scalar_one_or_none()
+        if not mode:
+            raise NoResultFound(f"Mode {mode_id} not found")
 
-    await session.delete(mode)
-    await session.commit()
+        await session.delete(mode)
+        await session.flush()
 
+        await self._invalidate(self._key_all(), self._key_by_id(mode_id))
+        if mode.default:
+            await self._invalidate(self._key_default())
+        if mode.active:
+            await self._invalidate(self._key_active())
 
-async def set_active_mode(session: AsyncSession, mode_id):
-    # deactivate all
-    await session.execute(update(Mode).values(is_active=False))
+        return self._serialize(mode) if return_serialized else mode
 
-    result = await session.execute(select(Mode).where(Mode.id == mode_id))
-    mode = result.scalar_one_or_none()
+    async def set_active_mode(
+        self,
+        session: AsyncSession,
+        mode_id: str,
+        return_serialized: bool = True,  # optional flag
+    ) -> Optional[Dict[str, Any]]:
 
-    if not mode:
-        raise NoResultFound("Mode not found")
+        # Clear existing active mode
+        result = await session.execute(
+            select(Mode).where(Mode.active.is_(True))
+        )
+        prev_active_mode = result.scalar_one_or_none()
+        if prev_active_mode:
+            prev_active_mode.active = False
+            await self._invalidate(self._key_by_id(prev_active_mode.id), self._key_active())
 
-    mode.is_active = True
-    await session.commit()
-    await session.refresh(mode)
-    return mode
+        result = await session.execute(
+            select(Mode)
+            .options(selectinload(Mode.configs))
+            .where(Mode.id == mode_id)
+        )
+        mode = result.scalar_one_or_none()
+        if not mode:
+            raise NoResultFound(f"Mode {mode_id} not found")
 
+        mode.active = True
 
-async def set_default_mode(session: AsyncSession, mode_id):
-    # deactivate all
-    await session.execute(update(Mode).values(is_default=False))
+        await session.flush()
 
-    result = await session.execute(select(Mode).where(Mode.id == mode_id))
-    mode = result.scalar_one_or_none()
+        result = await session.execute(
+            select(Mode)
+            .options(selectinload(Mode.configs))
+            .where(Mode.id == mode_id)
+        )
+        mode = result.scalar_one()
 
-    if not mode:
-        raise NoResultFound("Mode not found")
+        serialized = self._serialize(mode)
+        await self._invalidate(self._key_all())
+        await self._set(self._key_by_id(mode.id), copy.deepcopy(serialized),)
+        await self._set(self._key_active(), copy.deepcopy(serialized),)
 
-    mode.is_default = True
-    await session.commit()
-    await session.refresh(mode)
-    return mode
+        return serialized if return_serialized else mode
 
+    # ---------- Hydration ----------
 
-async def assign_logger_configs_to_mode(
-    session: AsyncSession,
-    mode_id: str,
-    logger_config_ids: list[str],
-) -> Mode:
-    """
-    Assign a list of LoggerConfig IDs to a Mode.
-    Ensures no two LoggerConfigs for the same Logger are in the mode.
-    """
-    result = await session.execute(select(Mode).where(Mode.id == mode_id))
-    mode = result.scalar_one_or_none()
-    if not mode:
-        raise NoResultFound("Mode not found")
+    # async def hydrate_mode_configs(
+    #     self,
+    #     session: AsyncSession,
+    #     mode: dict,
+    # ) -> List[dict]:
+    #     all_configs = await self.config_crud.list_configs(session)
 
-    # Fetch LoggerConfigs
-    result = await session.execute(
-        select(LoggerConfig).where(LoggerConfig.id.in_(logger_config_ids))
-    )
-    configs = result.scalars().all()
+    #     config_map = {c["id"]: c for c in all_configs}
 
-    # Validate uniqueness per logger
-    seen_logger_ids = set()
-    for cfg in configs:
-        if cfg.logger_id:
-            if cfg.logger_id in seen_logger_ids:
-                raise ValueError(
-                    "Cannot assign multiple LoggerConfigs for the same Logger to a Mode"
+    #     configs = []
+    #     for cfg_ref in mode["configs"]:
+    #         cfg = config_map.get(cfg_ref["id"])
+    #         if cfg:
+    #             logger = await self.logger_crud.get_logger(session, cfg["logger_id"])
+    #             cfg_copy = copy.deepcopy(cfg)
+    #             cfg_copy["logger"] = logger
+    #             configs.append(cfg_copy)
+
+    #     return configs
+
+    async def hydrate_modes_configs(
+        self,
+        session: AsyncSession,
+        modes: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+
+        if not modes:
+            return []
+
+        config_ids = {
+            cfg["id"]
+            for m in modes
+            for cfg in m.get("configs", [])
+        }
+
+        config_map = {}
+
+        if config_ids:
+            result = await session.execute(
+                select(Config)
+                .where(Config.id.in_(config_ids))
+                .options(
+                    joinedload(Config.modes),
+                    joinedload(Config.states)
                 )
-            seen_logger_ids.add(cfg.logger_id)
+            )
 
-    mode.logger_configs = configs
-    await session.commit()
-    await session.refresh(mode)
-    return mode
+            all_configs = result.unique().scalars().all()
 
+            config_map = {
+                cfg.id: self.config_crud._serialize(cfg)
+                for cfg in all_configs
+            }
 
-async def upsert_logger_config_for_mode(
-    session: AsyncSession,
-    mode_id: str,
-    logger_id: str,
-    config_id: str,
-) -> Mode:
-    result = await session.execute(
-        select(Mode)
-        .options(selectinload(Mode.logger_configs))
-        .where(Mode.id == mode_id)
-    )
-    mode = result.scalar_one_or_none()
-    if not mode:
-        raise NoResultFound("Mode not found")
+        hydrated_modes = []
 
-    # Fetch the new config
-    result = await session.execute(
-        select(LoggerConfig).where(LoggerConfig.id == config_id)
-    )
-    new_cfg = result.scalar_one_or_none()
-    if not new_cfg:
-        raise NoResultFound("LoggerConfig not found")
+        for mode in modes:
+            mode_copy = copy.deepcopy(mode)
 
-    if new_cfg.logger_id != logger_id:
-        raise ValueError("LoggerConfig does not belong to specified logger")
+            mode_copy["configs"] = [
+                config_map[cfg["id"]]
+                for cfg in mode.get("configs", [])
+                if cfg["id"] in config_map
+            ]
 
-    # Remove existing config for this logger
-    mode.logger_configs = [
-        cfg for cfg in mode.logger_configs
-        if cfg.logger_id != logger_id
-    ]
+            hydrated_modes.append(mode_copy)
 
-    # Add new config
-    mode.logger_configs.append(new_cfg)
-
-    await session.commit()
-    await session.refresh(mode)
-    return mode
+        return hydrated_modes
 
 
-async def remove_logger_config_from_mode(
-    session: AsyncSession,
-    mode_id: str,
-    config_id: str,
-) -> Mode:
-    """
-    Remove a single LoggerConfig from a Mode.
-    """
-    result = await session.execute(select(Mode).where(Mode.id == mode_id))
-    mode = result.scalar_one_or_none()
-    if not mode:
-        raise NoResultFound("Mode not found")
 
-    mode.logger_configs = [cfg for cfg in mode.logger_configs if cfg.id != config_id]
-
-    await session.commit()
-    await session.refresh(mode)
-    return mode
+    async def hydrate_mode_configs(
+        self,
+        session: AsyncSession,
+        mode: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Hydrate a single mode using the batch hydrate function.
+        """
+        hydrated_list = await self.hydrate_modes_configs(session, [mode])
+        return hydrated_list[0] if hydrated_list else mode
