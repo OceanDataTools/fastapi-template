@@ -59,6 +59,7 @@ echo "Running Alembic migrations..."
 poetry run alembic upgrade head
 
 # Default command (can be overridden via CMD)
+# CMD="uvicorn app.main:app --workers 1 --host 0.0.0.0 --port 8000"
 CMD="uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
 if [ "$ENVIRONMENT" = "Development" ]; then

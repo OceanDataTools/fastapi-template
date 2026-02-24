@@ -1,7 +1,7 @@
 from typing import AsyncGenerator, Optional
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from jwt.exceptions import PyJWTError as JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,3 +59,7 @@ async def get_current_user_optional(
     if not user or user.disabled:
         return None
     return user
+
+
+def get_async_server_api(request: Request):
+    return request.app.state.async_server_api
