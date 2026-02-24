@@ -6,9 +6,10 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
 
-from app.api import apikeys, auth, configuration, cruise, examples, loggers, logger_configs, modes, profile, users
+from app.api import apikeys, auth, configuration, configs, cruise, examples, loggers, modes, profile, users
 from app.config import settings
 from app.deps import get_current_user
+from async_fastapi_server_api import AsyncFastAPIServerAPI
 
 # Load pyproject.toml
 pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
@@ -20,7 +21,8 @@ project_version = pyproject["tool"]["poetry"]["version"]
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app: FastAPI):
+    app.state.async_server_api = AsyncFastAPIServerAPI()
     yield
 
 
@@ -93,4 +95,4 @@ app.include_router(configuration.router)
 app.include_router(cruise.router)
 app.include_router(modes.router)
 app.include_router(loggers.router)
-app.include_router(logger_configs.router)
+app.include_router(configs.router)
