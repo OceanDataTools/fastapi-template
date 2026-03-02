@@ -18,31 +18,34 @@ depends_on = None
 
 def upgrade() -> None:
     # --- Convert existing timestamp columns to timestamptz ---
-    op.alter_column('apikeys', 'created_at',
-                    existing_type=sa.DateTime(),
-                    type_=sa.DateTime(timezone=True),
-                    existing_nullable=False,
-                    postgresql_using="created_at AT TIME ZONE 'UTC'")
-    op.alter_column('apikeys', 'expires_at',
-                    existing_type=sa.DateTime(),
-                    type_=sa.DateTime(timezone=True),
-                    existing_nullable=True,
-                    postgresql_using="expires_at AT TIME ZONE 'UTC'")
-    op.alter_column('apikeys', 'last_used',
-                    existing_type=sa.DateTime(),
-                    type_=sa.DateTime(timezone=True),
-                    existing_nullable=True,
-                    postgresql_using="last_used AT TIME ZONE 'UTC'")
-    op.alter_column('password_reset_tokens', 'created_at',
-                    existing_type=sa.DateTime(),
-                    type_=sa.DateTime(timezone=True),
-                    existing_nullable=False,
-                    postgresql_using="created_at AT TIME ZONE 'UTC'")
-    op.alter_column('password_reset_tokens', 'expires_at',
-                    existing_type=sa.DateTime(),
-                    type_=sa.DateTime(timezone=True),
-                    existing_nullable=False,
-                    postgresql_using="expires_at AT TIME ZONE 'UTC'")
+    # SQLite uses dynamic typing and doesn't support ALTER COLUMN type changes;
+    # DateTime(timezone=True) is stored identically to DateTime() in SQLite.
+    if op.get_context().dialect.name != 'sqlite':
+        op.alter_column('apikeys', 'created_at',
+                        existing_type=sa.DateTime(),
+                        type_=sa.DateTime(timezone=True),
+                        existing_nullable=False,
+                        postgresql_using="created_at AT TIME ZONE 'UTC'")
+        op.alter_column('apikeys', 'expires_at',
+                        existing_type=sa.DateTime(),
+                        type_=sa.DateTime(timezone=True),
+                        existing_nullable=True,
+                        postgresql_using="expires_at AT TIME ZONE 'UTC'")
+        op.alter_column('apikeys', 'last_used',
+                        existing_type=sa.DateTime(),
+                        type_=sa.DateTime(timezone=True),
+                        existing_nullable=True,
+                        postgresql_using="last_used AT TIME ZONE 'UTC'")
+        op.alter_column('password_reset_tokens', 'created_at',
+                        existing_type=sa.DateTime(),
+                        type_=sa.DateTime(timezone=True),
+                        existing_nullable=False,
+                        postgresql_using="created_at AT TIME ZONE 'UTC'")
+        op.alter_column('password_reset_tokens', 'expires_at',
+                        existing_type=sa.DateTime(),
+                        type_=sa.DateTime(timezone=True),
+                        existing_nullable=False,
+                        postgresql_using="expires_at AT TIME ZONE 'UTC'")
 
     # --- Create OpenRVDAS tables ---
     op.create_table('cruise',
@@ -149,23 +152,24 @@ def downgrade() -> None:
     op.drop_table('cruise')
 
     # --- Revert timestamp columns back to naive DateTime ---
-    op.alter_column('password_reset_tokens', 'expires_at',
-                    existing_type=sa.DateTime(timezone=True),
-                    type_=sa.DateTime(),
-                    existing_nullable=False)
-    op.alter_column('password_reset_tokens', 'created_at',
-                    existing_type=sa.DateTime(timezone=True),
-                    type_=sa.DateTime(),
-                    existing_nullable=False)
-    op.alter_column('apikeys', 'last_used',
-                    existing_type=sa.DateTime(timezone=True),
-                    type_=sa.DateTime(),
-                    existing_nullable=True)
-    op.alter_column('apikeys', 'expires_at',
-                    existing_type=sa.DateTime(timezone=True),
-                    type_=sa.DateTime(),
-                    existing_nullable=True)
-    op.alter_column('apikeys', 'created_at',
-                    existing_type=sa.DateTime(timezone=True),
-                    type_=sa.DateTime(),
-                    existing_nullable=False)
+    if op.get_context().dialect.name != 'sqlite':
+        op.alter_column('password_reset_tokens', 'expires_at',
+                        existing_type=sa.DateTime(timezone=True),
+                        type_=sa.DateTime(),
+                        existing_nullable=False)
+        op.alter_column('password_reset_tokens', 'created_at',
+                        existing_type=sa.DateTime(timezone=True),
+                        type_=sa.DateTime(),
+                        existing_nullable=False)
+        op.alter_column('apikeys', 'last_used',
+                        existing_type=sa.DateTime(timezone=True),
+                        type_=sa.DateTime(),
+                        existing_nullable=True)
+        op.alter_column('apikeys', 'expires_at',
+                        existing_type=sa.DateTime(timezone=True),
+                        type_=sa.DateTime(),
+                        existing_nullable=True)
+        op.alter_column('apikeys', 'created_at',
+                        existing_type=sa.DateTime(timezone=True),
+                        type_=sa.DateTime(),
+                        existing_nullable=False)
