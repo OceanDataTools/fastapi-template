@@ -1,4 +1,5 @@
 import tomllib
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
@@ -8,6 +9,7 @@ from fastapi.routing import APIRoute
 from app.api import apikeys, auth, examples, profile, users
 from app.auth import get_current_user
 from app.config import settings
+from app.db.session import init_db
 
 # Load pyproject.toml
 pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
@@ -17,10 +19,19 @@ with open(pyproject_path, "rb") as f:
 project_name = pyproject["tool"]["poetry"]["name"]
 project_version = pyproject["tool"]["poetry"]["version"]
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await init_db()
+    yield
+
+
 app = FastAPI(
     title=project_name,
     version=project_version,
+    lifespan=lifespan,
 )
+
 
 app.add_middleware(
     CORSMiddleware,

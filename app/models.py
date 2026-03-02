@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table
@@ -105,9 +105,15 @@ class APIKey(Base):
     )
     key_hash: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     name: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    last_used: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_used: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     usage_count: Mapped[int] = mapped_column(Integer, default=0)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -119,7 +125,10 @@ class APIKey(Base):
     @property
     def is_expired(self) -> bool:
         """Returns True if the key is past expiration."""
-        return self.expires_at is not None and datetime.utcnow() >= self.expires_at
+        return (
+            self.expires_at is not None
+            and datetime.now(timezone.utc) >= self.expires_at
+        )
 
     @property
     def is_active(self) -> bool:
@@ -154,9 +163,12 @@ class PasswordResetToken(Base):
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
     expires_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.utcnow() + timedelta(hours=1)
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc) + timedelta(hours=1),
     )
     used: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -174,7 +186,9 @@ class RefreshToken(Base):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     issued_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
     )
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -16,7 +16,7 @@ async def create_refresh_token(
     rt = RefreshToken(
         token=str(token),
         user_id=user_id,
-        issued_at=datetime.utcnow(),
+        issued_at=datetime.now(timezone.utc),
         expires_at=expires_at,
     )
     session.add(rt)

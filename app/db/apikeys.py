@@ -15,7 +15,7 @@ async def get_apikey_by_header(session: AsyncSession, apikey: str) -> APIKey | N
     return result.scalar_one_or_none()
 
 
-def add_permissions_to_apikey(
+async def add_permissions_to_apikey(
     session: AsyncSession,
     apikey_id: UUID,
     permissions: list[
@@ -25,7 +25,7 @@ def add_permissions_to_apikey(
     for route, method in permissions:
         perm = APIKeyPermission(apikey_id=apikey_id, route=route, method=method.upper())
         session.add(perm)
-    session.commit()
+    await session.commit()
 
 
 async def get_permissions_for_apikey(session: AsyncSession, apikey_id: UUID):

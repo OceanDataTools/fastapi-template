@@ -1,7 +1,6 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-import jwt
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -12,6 +11,8 @@ from fastapi import (
     status,
 )
 from fastapi.security import OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -93,7 +94,10 @@ async def login_for_access_token(
     )  # revoke old tokens for user if you want
     await session.commit()
     await create_refresh_token(
-        session, refresh_token, user.id, datetime.utcnow() + refresh_token_expires
+        session,
+        refresh_token,
+        user.id,
+        datetime.now(timezone.utc) + refresh_token_expires,
     )
 
     # Set refresh token cookie (HttpOnly, secure in prod)
@@ -136,9 +140,9 @@ async def refresh_access_token(
                 detail="Invalid token: incorrect type, missing user, or roles",
             )
 
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")
-    except jwt.PyJWTError as e:
+    except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
 
     # Check token exists in DB
@@ -152,7 +156,7 @@ async def refresh_access_token(
         expires_delta=access_token_expires,
     )
 
-    max_age = max(0, int((rt.expires_at - datetime.utcnow()).total_seconds()))
+    max_age = max(0, int((rt.expires_at - datetime.now(timezone.utc)).total_seconds()))
 
     # Optionally rotate refresh token (issue new, revoke old)
     # For now, just re-set same refresh token cookie
@@ -207,7 +211,7 @@ async def forgot_password(
     reset_token = PasswordResetToken(
         token=token,
         user_id=user.id,
-        expires_at=datetime.utcnow() + timedelta(minutes=30),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
     )
     session.add(reset_token)
     await session.commit()
@@ -227,7 +231,11 @@ async def reset_password(
     )
     token_obj = result.scalar_one_or_none()
 
-    if not token_obj or token_obj.used or token_obj.expires_at < datetime.utcnow():
+    if (
+        not token_obj
+        or token_obj.used
+        or token_obj.expires_at < datetime.now(timezone.utc)
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token."
         )

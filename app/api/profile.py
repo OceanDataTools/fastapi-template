@@ -40,7 +40,7 @@ async def update_profile(
     current_user=Depends(get_current_user),
 ):
     updated_user = await update_user(
-        session, user_id=cast_uuid(current_user.id), **payload.dict()
+        session, user_id=cast_uuid(current_user.id), **payload.model_dump()
     )
     return updated_user
 

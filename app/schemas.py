@@ -2,14 +2,14 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import UUID4, BaseModel, EmailStr, Extra, Field, field_serializer
+from pydantic import UUID4, BaseModel, EmailStr, Field, field_serializer
 
 
 class RoleSchema(BaseModel):
     id: UUID4
     name: str
 
-    model_config = {"from_attributes": True, "extra": Extra.ignore}
+    model_config = {"from_attributes": True, "extra": "ignore"}
 
 
 class ProfileSchema(BaseModel):
@@ -19,7 +19,7 @@ class ProfileSchema(BaseModel):
     email: EmailStr
     roles: List[RoleSchema]  # keep full Role objects internally
 
-    model_config = {"from_attributes": True, "extra": Extra.ignore}
+    model_config = {"from_attributes": True, "extra": "ignore"}
 
     @field_serializer("roles")
     def serialize_roles(self, roles_value, info):
