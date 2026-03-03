@@ -1,12 +1,12 @@
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models_openrvdas import LogMessage
 from app.db.base import CachedAsyncCRUDBase, CacheKey
+from app.models_openrvdas import LogMessage
 
 
 class LogMessageCRUD(CachedAsyncCRUDBase):
@@ -42,7 +42,9 @@ class LogMessageCRUD(CachedAsyncCRUDBase):
         if cached is not None:
             return cached
 
-        result = await session.execute(select(LogMessage).where(LogMessage.id == log_id))
+        result = await session.execute(
+            select(LogMessage).where(LogMessage.id == log_id)
+        )
         log = result.scalar_one_or_none()
         if log is None:
             return None
@@ -60,16 +62,14 @@ class LogMessageCRUD(CachedAsyncCRUDBase):
             return cached
 
         result = await session.execute(
-            select(LogMessage)
-            .order_by(LogMessage.timestamp.desc())
-            .limit(limit)
+            select(LogMessage).order_by(LogMessage.timestamp.desc()).limit(limit)
         )
         logs = result.scalars().all()
-        serialized = [self._serialize_log(l) for l in logs]
+        serialized = [self._serialize_log(log) for log in logs]
 
         await self._set(key, serialized)
-        for l in logs:
-            await self._set(self._key_by_id(l.id), self._serialize_log(l))
+        for log in logs:
+            await self._set(self._key_by_id(log.id), self._serialize_log(log))
 
         return serialized
 
@@ -102,7 +102,7 @@ class LogMessageCRUD(CachedAsyncCRUDBase):
 
         result = await session.execute(stmt.order_by(LogMessage.timestamp.desc()))
         logs = result.scalars().all()
-        return [self._serialize_log(l) for l in logs]
+        return [self._serialize_log(log) for log in logs]
 
     # ---------- write ----------
     async def create_log_message(
@@ -125,13 +125,15 @@ class LogMessageCRUD(CachedAsyncCRUDBase):
         serialized = self._serialize_log(log)
 
         # Invalidate latest caches
-        await self._invalidate_prefix(("log_message"))
+        await self._invalidate_prefix(("log_message",))
         await self._set(self._key_by_id(log.id), serialized)
 
         return serialized
 
     async def delete_log_message(self, session: AsyncSession, log_id: int) -> None:
-        result = await session.execute(select(LogMessage).where(LogMessage.id == log_id))
+        result = await session.execute(
+            select(LogMessage).where(LogMessage.id == log_id)
+        )
         log = result.scalar_one_or_none()
         if log is None:
             raise NoResultFound(f"No LogMessage found with id={log_id}")
@@ -140,7 +142,7 @@ class LogMessageCRUD(CachedAsyncCRUDBase):
         await session.flush()
 
         await self._invalidate(self._key_by_id(log_id))
-        await self._invalidate_prefix(("log_message"))
+        await self._invalidate_prefix(("log_message",))
 
     async def delete_all_log_messages(self, session: AsyncSession) -> int:
         result = await session.execute(select(LogMessage))

@@ -1,14 +1,14 @@
-from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select, desc, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import desc, func, select
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.models_openrvdas import LoggerConfigState, Config
 from app.db.base import CachedAsyncCRUDBase, CacheKey
 from app.db.configs import ConfigCRUD
+from app.models_openrvdas import Config, LoggerConfigState
 
 
 class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
@@ -89,7 +89,8 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
         await session.flush()
         serialized = self._serialize(state)
 
-        await self._invalidate(self._key_latest_for_logger(logger_id))
+        if logger_id is not None:
+            await self._invalidate(self._key_latest_for_logger(logger_id))
         await self._set(self._key_by_id(state.id), serialized)
 
         return serialized if return_serialized else state
@@ -109,10 +110,11 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
         state.timestamp = datetime.now(timezone.utc)
         await session.flush()
 
+        serialized = self._serialize(state)
         await self._invalidate(self._key_latest_for_logger(logger_id))
         await self._set(self._key_by_id(state.id), serialized)
 
-        return self._serialize(state) if return_serialized else state
+        return serialized if return_serialized else state
 
     # ---------- READ ----------
     async def get_state_for_logger(
@@ -124,8 +126,10 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
         offset: Optional[int] = None,
         hydrate_configs: bool = False,
     ) -> List[Dict[str, Any]]:
-        stmt = select(LoggerConfigState).where(LoggerConfigState.logger_id == logger_id).order_by(
-            desc(LoggerConfigState.timestamp)
+        stmt = (
+            select(LoggerConfigState)
+            .where(LoggerConfigState.logger_id == logger_id)
+            .order_by(desc(LoggerConfigState.timestamp))
         )
         if since_timestamp:
             stmt = stmt.where(LoggerConfigState.timestamp >= since_timestamp)
@@ -151,8 +155,10 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
         offset: Optional[int] = None,
         hydrate_configs: bool = False,
     ) -> List[Dict[str, Any]]:
-        stmt = select(LoggerConfigState).where(LoggerConfigState.config_id == config_id).order_by(
-            desc(LoggerConfigState.timestamp)
+        stmt = (
+            select(LoggerConfigState)
+            .where(LoggerConfigState.config_id == config_id)
+            .order_by(desc(LoggerConfigState.timestamp))
         )
         if since_timestamp:
             stmt = stmt.where(LoggerConfigState.timestamp >= since_timestamp)
@@ -179,7 +185,7 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
         subq = (
             select(
                 LoggerConfigState.logger_id,
-                func.max(LoggerConfigState.timestamp).label("max_ts")
+                func.max(LoggerConfigState.timestamp).label("max_ts"),
             )
             .group_by(LoggerConfigState.logger_id)
             .subquery()
@@ -187,8 +193,8 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
 
         stmt = select(LoggerConfigState).join(
             subq,
-            (LoggerConfigState.logger_id == subq.c.logger_id) &
-            (LoggerConfigState.timestamp == subq.c.max_ts)
+            (LoggerConfigState.logger_id == subq.c.logger_id)
+            & (LoggerConfigState.timestamp == subq.c.max_ts),
         )
 
         result = await session.execute(stmt)
@@ -196,7 +202,9 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
         serialized_states = [self._serialize(s) for s in states]
 
         if hydrate_configs:
-            serialized_states = await self.hydrate_states_configs(session, serialized_states)
+            serialized_states = await self.hydrate_states_configs(
+                session, serialized_states
+            )
 
         latest_states: Dict[str, Dict[str, Any]] = {}
         for s in serialized_states:
@@ -208,7 +216,10 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
         return latest_states
 
     async def get_status_since_per_logger(
-        self, session: AsyncSession, since_timestamp: datetime, hydrate_configs: bool = False
+        self,
+        session: AsyncSession,
+        since_timestamp: datetime,
+        hydrate_configs: bool = False,
     ) -> Dict[str, List[Dict[str, Any]]]:
         stmt = (
             select(LoggerConfigState)
@@ -220,7 +231,9 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
         serialized_states = [self._serialize(s) for s in states]
 
         if hydrate_configs:
-            serialized_states = await self.hydrate_states_configs(session, serialized_states)
+            serialized_states = await self.hydrate_states_configs(
+                session, serialized_states
+            )
 
         grouped: Dict[str, List[Dict[str, Any]]] = {}
         for s in serialized_states:
@@ -264,24 +277,21 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
             result = await session.execute(
                 select(Config)
                 .where(Config.id.in_(config_ids))
-                .options(
-                    joinedload(Config.modes),
-                    joinedload(Config.states)
-                )
+                .options(joinedload(Config.modes), joinedload(Config.states))
             )
             all_configs = result.unique().scalars().all()
             # Now _serialize is fully safe to call
-            config_map = {cfg.id: self.config_crud._serialize(cfg) for cfg in all_configs}
+            config_map = {
+                cfg.id: self.config_crud._serialize(cfg) for cfg in all_configs
+            }
 
         return [{**s, "config": config_map.get(s["config_id"])} for s in states]
-
 
     async def hydrate_state_config(
         self, session: AsyncSession, state: Dict[str, Any]
     ) -> Dict[str, Any]:
         hydrated_list = await self.hydrate_states_configs(session, [state])
         return hydrated_list[0] if hydrated_list else state
-
 
     # ---------- HELPERS ----------
     @staticmethod
