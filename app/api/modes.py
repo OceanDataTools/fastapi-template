@@ -1,15 +1,15 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import apikey_or_jwt_required
-from app.db.session import get_async_session
 from app.db import mode_crud as crud_modes
-from app.deps import get_async_server_api
-from app.schemas_openrvdas import ModeCreate, ModeUpdate, ModeOut
-from web_backend.async_fastapi_server_api import AsyncFastAPIServerAPI
+from app.deps import get_async_server_api, get_async_session
+from app.schemas_openrvdas import ModeOut
+from async_fastapi_server_api import AsyncFastAPIServerAPI
+
 # from web_backend.fastapi_server_api import FastAPIServerAPI
 
 router = APIRouter(prefix="/api/v1/modes", tags=["Modes"])
@@ -105,7 +105,7 @@ async def get_mode(
 async def activate_mode(
     mode_id: str,
     session: AsyncSession = Depends(get_async_session),
-    server_api: AsyncFastAPIServerAPI = Depends(get_async_server_api)
+    server_api: AsyncFastAPIServerAPI = Depends(get_async_server_api),
 ):
     try:
         await crud_modes.get_mode(session, mode_id)

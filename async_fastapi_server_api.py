@@ -140,7 +140,7 @@ class AsyncFastAPIServerAPI:
             return cfg.get("config_json")
         return await self._with_session(_inner)
 
-    async def get_logger_configs(self, mode_id: str = None):
+    async def get_logger_configs(self, mode_id: Optional[str] = None):
         async def _inner(session):
             if mode_id is None:
                 mode = await crud_modes.get_active_mode(session, hydrate_configs=True)
@@ -160,7 +160,7 @@ class AsyncFastAPIServerAPI:
             }
         return await self._with_session(_inner)
 
-    async def get_logger_config_name(self, logger_id: str, mode_id: str = None):
+    async def get_logger_config_name(self, logger_id: str, mode_id: Optional[str] = None):
         async def _inner(session):
             if mode_id is None:
                 mode = await crud_modes.get_active_mode(session, hydrate_configs=True)
