@@ -2,26 +2,20 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import apikey_or_jwt_required
-from app.db.session import get_async_session
 from app.db import config_crud as crud_configs
-from app.deps import get_async_server_api
-from app.schemas_openrvdas import (
-    ConfigCreate,
-    ConfigUpdate,
-    ConfigOut,
-)
-
-from web_backend.async_fastapi_server_api import AsyncFastAPIServerAPI
-
+from app.deps import get_async_server_api, get_async_session
+from app.schemas_openrvdas import ConfigOut
+from async_fastapi_server_api import AsyncFastAPIServerAPI
 
 router = APIRouter(
     prefix="/api/v1/configs",
     tags=["Configs"],
 )
+
 
 @router.get("/", response_model=List[ConfigOut])
 async def list_configs(
@@ -45,11 +39,13 @@ async def get_config(
 async def activate_config(
     config_id: str,
     session: AsyncSession = Depends(get_async_session),
-    server_api: AsyncFastAPIServerAPI = Depends(get_async_server_api)
+    server_api: AsyncFastAPIServerAPI = Depends(get_async_server_api),
 ):
     try:
         config = await crud_configs.get_config(session, config_id)
-        state = await server_api.set_active_logger_config(config['logger_id'], config_id)
+        state = await server_api.set_active_logger_config(
+            config["logger_id"], config_id
+        )
         logging.warning(f"state {state}")
     except NoResultFound as e:
         raise HTTPException(status_code=422, detail=str(e))
