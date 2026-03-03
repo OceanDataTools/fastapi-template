@@ -12,11 +12,11 @@ include = "app"
 [tool.poetry.dependencies]
 python = "^3.11"
 fastapi = {extras = ["all"], version = "^0.116.1"}
-uvicorn = {extras = ["standard"], version = "0.29.0"}
-asyncpg = "0.29.0"
+uvicorn = {extras = ["standard"], version = "^0.29.0"}
+asyncpg = "^0.30.0"
 psycopg = "^3.1"
 alembic = "^1.16.4"
-sqlalchemy = "2.0.19"
+sqlalchemy = "^2.0.36"
 python-jose = { version = "3.3.0", extras = ["cryptography"] }
 passlib = { version = "1.7.4", extras = ["bcrypt"] }
 greenlet = "^3.2.3"

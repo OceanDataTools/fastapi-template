@@ -7,9 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
 
 from app.api import apikeys, auth, examples, profile, users
-from app.auth import get_current_user
 from app.config import settings
-from app.db.session import init_db
+from app.deps import get_current_user
 
 # Load pyproject.toml
 pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
@@ -22,7 +21,6 @@ project_version = pyproject["tool"]["poetry"]["version"]
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    await init_db()
     yield
 
 

@@ -21,10 +21,10 @@ from app.auth import (
     authenticate_user,
     create_access_jwt,
     create_refresh_jwt,
-    get_db,
 )
 from app.config import settings
 from app.db.auth import create_refresh_token, get_refresh_token, revoke_refresh_token
+from app.deps import get_async_session
 from app.models import PasswordResetToken, User
 from app.schemas import ForgotPasswordSchema, RegisterUserSchema, ResetPasswordSchema
 from app.utils import cast_uuid, get_password_hash, send_reset_email
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
 @router.post("/register", status_code=201)
 async def register_user(
-    user: RegisterUserSchema, session: AsyncSession = Depends(get_db)
+    user: RegisterUserSchema, session: AsyncSession = Depends(get_async_session)
 ):
     result = await session.execute(select(User).where(User.username == user.username))
 
@@ -64,7 +64,7 @@ async def register_user(
 async def login_for_access_token(
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_async_session),
 ):
     user = await authenticate_user(session, form_data.username, form_data.password)
     if not user:
@@ -122,7 +122,7 @@ async def login_for_access_token(
 async def refresh_access_token(
     request: Request,
     response: Response,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_async_session),
 ):
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
@@ -181,7 +181,7 @@ async def refresh_access_token(
 async def logout(
     response: Response,
     request: Request,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_async_session),
 ):
     refresh_token = request.cookies.get("refresh_token")
     if refresh_token:
@@ -197,7 +197,7 @@ async def logout(
 async def forgot_password(
     form_data: ForgotPasswordSchema,
     background_tasks: BackgroundTasks,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_async_session),
 ):
     result = await session.execute(select(User).where(User.email == form_data.email))
     user = result.scalar_one_or_none()
@@ -224,7 +224,7 @@ async def forgot_password(
 
 @router.post("/reset-password")
 async def reset_password(
-    data: ResetPasswordSchema, session: AsyncSession = Depends(get_db)
+    data: ResetPasswordSchema, session: AsyncSession = Depends(get_async_session)
 ):
     result = await session.execute(
         select(PasswordResetToken).where(PasswordResetToken.token == data.token)

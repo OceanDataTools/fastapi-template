@@ -3,8 +3,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_async_session
 from app.db.users import get_user_by_email, get_user_by_username
+from app.deps import get_async_session
 
 router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 

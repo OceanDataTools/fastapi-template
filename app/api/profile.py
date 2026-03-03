@@ -3,9 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth import get_current_user
-from app.db.session import get_async_session
 from app.db.users import update_user
+from app.deps import get_async_session, get_current_user
 from app.models import User
 from app.schemas import ProfileSchema, ProfileUpdatePasswordSchema, ProfileUpdateSchema
 from app.utils import cast_uuid, get_password_hash, verify_password

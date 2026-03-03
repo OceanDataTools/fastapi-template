@@ -1,17 +1,14 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
-from fastapi import Depends, HTTPException, Request, Security, status
+from fastapi import Depends, HTTPException, Request, Security
 from fastapi.security import APIKeyHeader, HTTPBearer, OAuth2PasswordBearer
-from jose import JWTError, jwt
-
-# from passlib.context import CryptContext
+from jose import jwt
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.apikeys import get_apikey_by_header, get_permissions_for_apikey
-from app.db.session import AsyncSessionLocal
 from app.db.users import get_user_by_username
 from app.models import User
 from app.utils import verify_password
@@ -41,11 +38,6 @@ class TokenPayload(BaseModel):
     roles: Optional[List[str]] = None
 
 
-async def get_db() -> AsyncSession:
-    async with AsyncSessionLocal() as session:
-        yield session
-
-
 async def authenticate_user(
     session: AsyncSession, username: str, password: str
 ) -> Optional[User]:
@@ -73,55 +65,9 @@ def create_refresh_jwt(data: dict, expires_delta: Optional[timedelta] = None):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme), session: AsyncSession = Depends(get_db)
-) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    user = await get_user_by_username(session, username)
-    if user is None:
-        raise credentials_exception
-    if user.disabled:
-        raise HTTPException(status_code=400, detail="Inactive user")
-    return user
-
-
-async def get_current_user_optional(
-    token: str = Depends(oauth2_scheme),
-    session: AsyncSession = Depends(get_db),
-) -> Optional[User]:
-
-    if not token:
-        return None
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if not username:
-            return None
-    except JWTError:
-        return None
-
-    user = await get_user_by_username(session, username)
-    if not user or user.disabled:
-        return None
-    return user
-
-
 def jwt_required(required_roles: Optional[Tuple[str, ...]] = None):
-    """
-    Require the user to have at least one of the specified roles.
-    """
+    """Require a valid JWT, optionally restricted to specific roles."""
+    from app.deps import get_current_user
 
     async def role_checker(user: User = Depends(get_current_user)):
         if not user.roles or len(user.roles) == 0:
@@ -138,9 +84,11 @@ def jwt_required(required_roles: Optional[Tuple[str, ...]] = None):
 
 
 def apikey_required(route: str | None = None, method: str | None = None):
+    from app.deps import get_async_session
+
     async def apikey_checker(
         request: Request,
-        session: AsyncSession = Depends(get_db),
+        session: AsyncSession = Depends(get_async_session),
         apikey_header: str = Security(api_key_scheme),
     ):
         if not apikey_header:
@@ -153,7 +101,6 @@ def apikey_required(route: str | None = None, method: str | None = None):
         route_path = route or request.scope["route"].path
         http_method = (method or request.method).upper()
 
-        # Check permission
         apikey_perms = await get_permissions_for_apikey(session, apikey.id)
         has_perm = any(
             perm.route == route_path and perm.method == http_method
@@ -172,9 +119,11 @@ def apikey_or_jwt_required(
     method: Optional[str] = None,
     required_roles: Optional[Tuple[str, ...]] = None,
 ):
+    from app.deps import get_async_session, get_current_user_optional
+
     async def apikey_or_jwt_checker(
         request: Request,
-        session: AsyncSession = Depends(get_db),
+        session: AsyncSession = Depends(get_async_session),
         user: Optional[User] = Depends(get_current_user_optional),
         apikey_header: str = Security(api_key_scheme),
         token: Optional[str] = Security(jwt_scheme),
@@ -223,7 +172,7 @@ def apikey_or_jwt_required(
 
             return {"auth_type": "apikey", "principal": apikey}
 
-        # --- Neither JWT nor API key ---
+        # --- Neither ---
         raise HTTPException(status_code=401, detail="No authentication provided")
 
     return apikey_or_jwt_checker
