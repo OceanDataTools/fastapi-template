@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import jwt
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -11,8 +12,8 @@ from fastapi import (
     status,
 )
 from fastapi.security import OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from jose.exceptions import ExpiredSignatureError
+from jwt.exceptions import ExpiredSignatureError
+from jwt.exceptions import PyJWTError as JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

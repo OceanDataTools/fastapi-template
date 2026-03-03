@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
+import jwt
 from fastapi import Depends, HTTPException, Request, Security
 from fastapi.security import APIKeyHeader, HTTPBearer, OAuth2PasswordBearer
-from jose import jwt
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
