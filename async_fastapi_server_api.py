@@ -310,20 +310,16 @@ class AsyncFastAPIServerAPI:
                     )
 
             # 5. Modes
-            mode_objs = {
-                mode_id: await crud_modes.create_mode(session, mode_id=mode_id)
-                for mode_id in modes_cfg.keys()
-            }
+            for mode_id in modes_cfg.keys():
+                await crud_modes.create_mode(session, id=mode_id)
 
             # 6. Mode ↔ Logger ↔ LoggerConfig
             for mode_name, logger_map in modes_cfg.items():
-                mode = mode_objs[mode_name]
                 for logger_name, config_name in logger_map.items():
                     await crud_modes.upsert_config_for_mode(
                         session=session,
-                        mode_id=mode.id,
-                        logger_id=logger_objs[logger_name].id,
-                        config_id=logger_config_objs[config_name].id,
+                        mode_id=mode_name,
+                        config_id=config_name,
                     )
 
             # 7. Default / Active Mode
@@ -341,11 +337,11 @@ class AsyncFastAPIServerAPI:
             try:
                 await crud_cruise.delete_cruise(session)
                 for mode in await crud_modes.list_modes(session):
-                    await crud_modes.delete_mode(session, mode.id)
+                    await crud_modes.delete_mode(session, mode["id"])
                 for logger in await crud_loggers.list_loggers(session):
-                    await crud_loggers.delete_logger(session, logger.id)
+                    await crud_loggers.delete_logger(session, logger["id"])
                 for cfg in await crud_configs.list_configs(session):
-                    await crud_configs.delete_config(session, cfg.id)
+                    await crud_configs.delete_config(session, cfg["id"])
             except Exception:
                 logging.exception("Failed to delete configuration")
                 raise
