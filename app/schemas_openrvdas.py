@@ -1,8 +1,8 @@
 # app/schemas.py
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
-from pydantic import BaseModel, Extra, Field, field_serializer, model_serializer, computed_field
+from pydantic import BaseModel, Extra, Field, computed_field, field_serializer
 
 
 # -------------------
@@ -13,11 +13,14 @@ class CruiseBase(BaseModel):
     end: Optional[datetime] = Field(None, description="End datetime of the Cruise")
     config_filename: Optional[str] = Field(None, description="Optional config filename")
 
+
 class CruiseCreate(CruiseBase):
     cruise_id: str = Field(..., description="Identifier for the Cruise")
 
+
 class CruiseUpdate(CruiseBase):
     pass  # All fields optional for PATCH
+
 
 class CruiseRead(CruiseBase):
     cruise_id: str
@@ -33,6 +36,7 @@ class ConfigRef(BaseModel):
 
     model_config = {"from_attributes": True, "extra": Extra.ignore}
 
+
 class LoggerRef(BaseModel):
     id: str
 
@@ -45,14 +49,17 @@ class LoggerRef(BaseModel):
 class ModeBase(BaseModel):
     id: str = Field(..., max_length=255)
 
+
 class ModeCreate(ModeBase):
     config_ids: List[str] = []
     default: bool | None = None
+
 
 class ModeUpdate(BaseModel):
     config_ids: List[str] | None = None
     active: bool | None = None
     default: bool | None = None
+
 
 class ModeOut(ModeBase):
     id: str
@@ -73,11 +80,14 @@ class ModeOut(ModeBase):
 class LoggerBase(BaseModel):
     id: str = Field(None, max_length=255)
 
+
 class LoggerCreate(LoggerBase):
     pass
 
+
 class LoggerUpdate(LoggerBase):
     pass
+
 
 class LoggerOut(BaseModel):
     id: str
@@ -108,17 +118,20 @@ class ConfigBase(BaseModel):
     config_json: Optional[str]
     logger_id: Optional[str]
 
+
 class ConfigCreate(ConfigBase):
     config_json: str
 
+
 class ConfigUpdate(ConfigBase):
     pass
+
 
 class ConfigOut(ConfigBase):
 
     model_config = {"from_attributes": True, "extra": Extra.ignore}
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def active(self) -> bool:
         for state in getattr(self, "states", []):
