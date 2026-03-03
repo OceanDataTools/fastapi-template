@@ -2,14 +2,14 @@ import copy
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
 
-from app.models_openrvdas import Mode, Config
 from app.db.base import CachedAsyncCRUDBase, CacheKey
 from app.db.configs import ConfigCRUD
 from app.db.loggers import LoggerCRUD
+from app.models_openrvdas import Config, Mode
 
 
 class ModeCRUD(CachedAsyncCRUDBase):
@@ -48,8 +48,7 @@ class ModeCRUD(CachedAsyncCRUDBase):
             "active": mode.active,
             "default": mode.default,
             "configs": [
-                {"id": cfg.id, "logger_id": cfg.logger_id}
-                for cfg in mode.configs
+                {"id": cfg.id, "logger_id": cfg.logger_id} for cfg in mode.configs
             ],
         }
 
@@ -67,9 +66,7 @@ class ModeCRUD(CachedAsyncCRUDBase):
             modes = copy.deepcopy(cached)
         else:
             result = await session.execute(
-                select(Mode).options(
-                    selectinload(Mode.configs)
-                )
+                select(Mode).options(selectinload(Mode.configs))
             )
             orm_modes = result.scalars().all()
             modes = [self._serialize(m) for m in orm_modes]
@@ -123,7 +120,7 @@ class ModeCRUD(CachedAsyncCRUDBase):
             all_modes = await self.list_modes(session)
             mode = next((m for m in all_modes if m["active"]), None)
             if mode is None:
-                raise NoResultFound(f"Active mode not found")
+                raise NoResultFound("Active mode not found")
 
             await self._set(self._key_active(), copy.deepcopy(mode))
 
@@ -145,10 +142,9 @@ class ModeCRUD(CachedAsyncCRUDBase):
             all_modes = await self.list_modes(session)
             mode = next((m for m in all_modes if m["default"]), None)
             if mode is None:
-                raise NoResultFound(f"Default mode not found")
+                raise NoResultFound("Default mode not found")
 
             await self._set(self._key_default(), copy.deepcopy(mode))
-
 
         if hydrate_configs:
             mode = await self.hydrate_mode_configs(session, mode)
@@ -182,9 +178,7 @@ class ModeCRUD(CachedAsyncCRUDBase):
         **data,
     ) -> Optional[Dict[str, Any]]:
         result = await session.execute(
-            select(Mode)
-            .options(selectinload(Mode.configs))
-            .where(Mode.id == mode_id)
+            select(Mode).options(selectinload(Mode.configs)).where(Mode.id == mode_id)
         )
         mode = result.scalar_one_or_none()
         if not mode:
@@ -194,13 +188,13 @@ class ModeCRUD(CachedAsyncCRUDBase):
         if default is True:
 
             # Clear existing default mode
-            result = await session.execute(
-                select(Mode).where(Mode.default.is_(True))
-            )
+            result = await session.execute(select(Mode).where(Mode.default.is_(True)))
             prev_default_mode = result.scalar_one_or_none()
             if prev_default_mode:
                 prev_default_mode.default = False
-                await self._invalidate(self._key_by_id(prev_default_mode.id), self._key_default())
+                await self._invalidate(
+                    self._key_by_id(prev_default_mode.id), self._key_default()
+                )
 
         for key, value in data.items():
             if key not in ("config_ids",) and value is not None:
@@ -208,15 +202,15 @@ class ModeCRUD(CachedAsyncCRUDBase):
 
         config_ids = data.get("config_ids")
         if config_ids is not None:
-            configs = await self.config_crud.get_configs_by_ids(session, config_ids)
-            mode.configs = configs
+            result = await session.execute(
+                select(Config).where(Config.id.in_(config_ids))
+            )
+            mode.configs = list(result.scalars().all())
 
         await session.flush()
 
         result = await session.execute(
-            select(Mode)
-            .options(selectinload(Mode.configs))
-            .where(Mode.id == mode_id)
+            select(Mode).options(selectinload(Mode.configs)).where(Mode.id == mode_id)
         )
         mode = result.scalar_one()
 
@@ -236,9 +230,7 @@ class ModeCRUD(CachedAsyncCRUDBase):
         return_serialized: bool = True,
     ) -> Optional[Dict[str, Any]]:
         result = await session.execute(
-            select(Mode)
-            .options(selectinload(Mode.configs))
-            .where(Mode.id == mode_id)
+            select(Mode).options(selectinload(Mode.configs)).where(Mode.id == mode_id)
         )
 
         mode = result.scalar_one_or_none()
@@ -256,6 +248,58 @@ class ModeCRUD(CachedAsyncCRUDBase):
 
         return self._serialize(mode) if return_serialized else mode
 
+    async def set_default_mode(
+        self,
+        session: AsyncSession,
+        mode_id: str,
+    ) -> None:
+        result = await session.execute(select(Mode).where(Mode.default.is_(True)))
+        prev_default = result.scalar_one_or_none()
+        if prev_default and prev_default.id != mode_id:
+            prev_default.default = False
+            await self._invalidate(
+                self._key_by_id(prev_default.id), self._key_default()
+            )
+
+        result = await session.execute(
+            select(Mode).options(selectinload(Mode.configs)).where(Mode.id == mode_id)
+        )
+        mode = result.scalar_one_or_none()
+        if not mode:
+            raise NoResultFound(f"Mode {mode_id} not found")
+
+        mode.default = True
+        await session.flush()
+
+        serialized = self._serialize(mode)
+        await self._invalidate(self._key_all())
+        await self._set(self._key_by_id(mode.id), copy.deepcopy(serialized))
+        await self._set(self._key_default(), copy.deepcopy(serialized))
+
+    async def upsert_config_for_mode(
+        self,
+        session: AsyncSession,
+        mode_id: str,
+        config_id: str,
+    ) -> None:
+        result = await session.execute(
+            select(Mode).options(selectinload(Mode.configs)).where(Mode.id == mode_id)
+        )
+        mode = result.scalar_one_or_none()
+        if not mode:
+            raise NoResultFound(f"Mode {mode_id} not found")
+
+        result = await session.execute(select(Config).where(Config.id == config_id))
+        cfg = result.scalar_one_or_none()
+        if not cfg:
+            raise NoResultFound(f"Config {config_id} not found")
+
+        if config_id not in [c.id for c in mode.configs]:
+            mode.configs.append(cfg)
+
+        await session.flush()
+        await self._invalidate(self._key_all(), self._key_by_id(mode_id))
+
     async def set_active_mode(
         self,
         session: AsyncSession,
@@ -264,18 +308,16 @@ class ModeCRUD(CachedAsyncCRUDBase):
     ) -> Optional[Dict[str, Any]]:
 
         # Clear existing active mode
-        result = await session.execute(
-            select(Mode).where(Mode.active.is_(True))
-        )
+        result = await session.execute(select(Mode).where(Mode.active.is_(True)))
         prev_active_mode = result.scalar_one_or_none()
         if prev_active_mode:
             prev_active_mode.active = False
-            await self._invalidate(self._key_by_id(prev_active_mode.id), self._key_active())
+            await self._invalidate(
+                self._key_by_id(prev_active_mode.id), self._key_active()
+            )
 
         result = await session.execute(
-            select(Mode)
-            .options(selectinload(Mode.configs))
-            .where(Mode.id == mode_id)
+            select(Mode).options(selectinload(Mode.configs)).where(Mode.id == mode_id)
         )
         mode = result.scalar_one_or_none()
         if not mode:
@@ -286,16 +328,20 @@ class ModeCRUD(CachedAsyncCRUDBase):
         await session.flush()
 
         result = await session.execute(
-            select(Mode)
-            .options(selectinload(Mode.configs))
-            .where(Mode.id == mode_id)
+            select(Mode).options(selectinload(Mode.configs)).where(Mode.id == mode_id)
         )
         mode = result.scalar_one()
 
         serialized = self._serialize(mode)
         await self._invalidate(self._key_all())
-        await self._set(self._key_by_id(mode.id), copy.deepcopy(serialized),)
-        await self._set(self._key_active(), copy.deepcopy(serialized),)
+        await self._set(
+            self._key_by_id(mode.id),
+            copy.deepcopy(serialized),
+        )
+        await self._set(
+            self._key_active(),
+            copy.deepcopy(serialized),
+        )
 
         return serialized if return_serialized else mode
 
@@ -330,11 +376,7 @@ class ModeCRUD(CachedAsyncCRUDBase):
         if not modes:
             return []
 
-        config_ids = {
-            cfg["id"]
-            for m in modes
-            for cfg in m.get("configs", [])
-        }
+        config_ids = {cfg["id"] for m in modes for cfg in m.get("configs", [])}
 
         config_map = {}
 
@@ -342,17 +384,13 @@ class ModeCRUD(CachedAsyncCRUDBase):
             result = await session.execute(
                 select(Config)
                 .where(Config.id.in_(config_ids))
-                .options(
-                    joinedload(Config.modes),
-                    joinedload(Config.states)
-                )
+                .options(joinedload(Config.modes), joinedload(Config.states))
             )
 
             all_configs = result.unique().scalars().all()
 
             config_map = {
-                cfg.id: self.config_crud._serialize(cfg)
-                for cfg in all_configs
+                cfg.id: self.config_crud._serialize(cfg) for cfg in all_configs
             }
 
         hydrated_modes = []
@@ -369,8 +407,6 @@ class ModeCRUD(CachedAsyncCRUDBase):
             hydrated_modes.append(mode_copy)
 
         return hydrated_modes
-
-
 
     async def hydrate_mode_configs(
         self,
