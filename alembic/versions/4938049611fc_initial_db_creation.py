@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy import table, column, String, Boolean, Integer, DateTime
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import AsyncSession
-from passlib.context import CryptContext
+import bcrypt
 from datetime import datetime
 from uuid import uuid4
 from app.config import settings
@@ -102,8 +102,9 @@ def upgrade() -> None:
     conn.execute(roles_table.insert().values(id=uuid4(), name='user'))
 
     # Hash admin password
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    hashed_password = pwd_context.hash(settings.default_admin_password)
+    hashed_password = bcrypt.hashpw(
+        settings.default_admin_password.encode(), bcrypt.gensalt()
+    ).decode()
 
     # Insert admin user
     conn.execute(
