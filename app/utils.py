@@ -1,22 +1,19 @@
-# from jose import JWTError, jwt
 import hashlib
 from uuid import UUID
 
-from passlib.context import CryptContext
+import bcrypt
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
 from app.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def get_apikey_hash(apikey: str) -> str:

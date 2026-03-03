@@ -18,11 +18,10 @@ psycopg = "^3.1"
 alembic = "^1.16.4"
 sqlalchemy = "^2.0.36"
 python-jose = { version = "3.3.0", extras = ["cryptography"] }
-passlib = { version = "1.7.4", extras = ["bcrypt"] }
 greenlet = "^3.2.3"
 python-multipart = "^0.0.20"
 pydantic-settings = "^2.10.1"
-bcrypt = "<4.0"
+bcrypt = "^4.0"
 pyjwt = "^2.10.1"
 python-dotenv = "^1.0"
 aiosqlite = "^0.18"  # sqlite
