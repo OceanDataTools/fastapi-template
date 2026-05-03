@@ -157,7 +157,12 @@ async def refresh_access_token(
         expires_delta=access_token_expires,
     )
 
-    max_age = max(0, int((rt.expires_at - datetime.now(timezone.utc)).total_seconds()))
+    expires_at = (
+        rt.expires_at
+        if rt.expires_at.tzinfo
+        else rt.expires_at.replace(tzinfo=timezone.utc)
+    )
+    max_age = max(0, int((expires_at - datetime.now(timezone.utc)).total_seconds()))
 
     # Optionally rotate refresh token (issue new, revoke old)
     # For now, just re-set same refresh token cookie
@@ -235,7 +240,12 @@ async def reset_password(
     if (
         not token_obj
         or token_obj.used
-        or token_obj.expires_at < datetime.now(timezone.utc)
+        or (
+            token_obj.expires_at
+            if token_obj.expires_at.tzinfo
+            else token_obj.expires_at.replace(tzinfo=timezone.utc)
+        )
+        < datetime.now(timezone.utc)
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token."
