@@ -143,21 +143,33 @@ class AsyncFastAPIServerAPI:
     async def get_logger_configs(self, mode_id: Optional[str] = None):
         async def _inner(session):
             if mode_id is None:
-                mode = await crud_modes.get_active_mode(session, hydrate_configs=True)
-                if not mode:
-                    raise KeyError("No active mode")
+                # Return the currently desired config per logger from LoggerConfigState,
+                # which is what set_active_logger_config and set_active_mode write to.
+                latest_states = await crud_logger_config_state.get_latest_status_per_logger(session)
+                if not latest_states:
+                    return None
+                result = {}
+                for logger_id, state in latest_states.items():
+                    config_id = state.get("config_id")
+                    if config_id:
+                        cfg = await crud_configs.get_config(session, config_id)
+                        if cfg:
+                            config_dict = json.loads(cfg.get("config_json") or "{}")
+                            config_dict["name"] = config_id
+                            result[logger_id] = config_dict
+                return result if result else None
             else:
                 mode = await crud_modes.get_mode(session, mode_id, hydrate_configs=True)
                 if not mode:
                     raise KeyError(f"Mode {mode_id} not found")
-            return {
-                cfg.get("logger_id"): {
-                    "name": cfg.get("id"),
-                    "config_json": cfg.get("config_json"),
-                    "logger": cfg.get("logger")  # hydrated logger info
+                return {
+                    cfg.get("logger_id"): {
+                        "name": cfg.get("id"),
+                        "config_json": cfg.get("config_json"),
+                        "logger": cfg.get("logger")
+                    }
+                    for cfg in mode.get("configs", [])
                 }
-                for cfg in mode.get("configs", [])
-            }
         return await self._with_session(_inner)
 
     async def get_logger_config_name(self, logger_id: str, mode_id: Optional[str] = None):

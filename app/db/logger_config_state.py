@@ -91,6 +91,7 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
 
         if logger_id is not None:
             await self._invalidate(self._key_latest_for_logger(logger_id))
+        await self._invalidate(("logger_config_state", "latest"))
         await self._set(self._key_by_id(state.id), serialized)
 
         return serialized if return_serialized else state
@@ -178,7 +179,7 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
     async def get_latest_status_per_logger(
         self, session: AsyncSession, hydrate_configs: bool = False
     ) -> Dict[str, Dict[str, Any]]:
-        cached = await self._get(("logger_config_state", "latest"))
+        cached = await self._get(("logger_config_state", "latest"), session)
         if cached and not hydrate_configs:
             return cached
 
