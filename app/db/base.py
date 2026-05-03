@@ -3,7 +3,7 @@ import time
 from typing import Any, Dict, Optional, Tuple, List
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models_openrvdas import LastUpdate
@@ -168,5 +168,5 @@ class CachedAsyncCRUDBase:
             last = LastUpdate()
             session.add(last)
         else:
-            # if LastUpdate has auto-update timestamp, just touching is enough
-            pass
+            last.timestamp = func.now()
+        await session.flush()
