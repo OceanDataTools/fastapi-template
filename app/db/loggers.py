@@ -110,6 +110,16 @@ class LoggerCRUD(CachedAsyncCRUDBase):
         session.add(logger)
         await session.flush()
 
+        result = await session.execute(
+            select(Logger)
+            .options(
+                selectinload(Logger.configs),
+                selectinload(Logger.config_states),
+            )
+            .where(Logger.id == logger.id)
+        )
+        logger = result.scalar_one()
+
         serialized = self._serialize(logger)
 
         await self._invalidate(self._key_all())

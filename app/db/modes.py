@@ -163,6 +163,11 @@ class ModeCRUD(CachedAsyncCRUDBase):
         session.add(mode)
         await session.flush()
 
+        result = await session.execute(
+            select(Mode).options(selectinload(Mode.configs)).where(Mode.id == mode.id)
+        )
+        mode = result.scalar_one()
+
         serialized = self._serialize(mode)
 
         await self._invalidate(self._key_all())
