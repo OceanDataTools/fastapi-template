@@ -56,6 +56,7 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
         failed: Optional[bool] = None,
         pid: Optional[int] = None,
         errors: Optional[str] = None,
+        update_timestamp: bool = True,
         return_serialized: bool = True,
     ) -> Optional[Dict[str, Any]]:
         stmt = select(LoggerConfigState).where(
@@ -73,6 +74,7 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
                 failed=failed if failed is not None else False,
                 pid=pid,
                 errors=errors,
+                timestamp=datetime.now(timezone.utc) if update_timestamp else datetime(1970, 1, 1, tzinfo=timezone.utc),
             )
             session.add(state)
         else:
@@ -84,7 +86,8 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
                 state.pid = pid
             if errors is not None:
                 state.errors = errors
-            state.timestamp = datetime.now(timezone.utc)
+            if update_timestamp:
+                state.timestamp = datetime.now(timezone.utc)
 
         await session.flush()
         serialized = self._serialize(state)

@@ -244,6 +244,7 @@ class AsyncFastAPIServerAPI:
                     failed=logger_report.get("failed"),
                     pid=logger_report.get("pid"),
                     errors=error_text,
+                    update_timestamp=False,
                 )
         await self._with_transaction(_inner)
 
@@ -289,6 +290,15 @@ class AsyncFastAPIServerAPI:
                 raise ValueError(f"No logger for config '{cfg_id}'")
 
         async def _inner(session):
+            # 0. Clear existing modes / loggers / configs so re-loading the same
+            #    (or a different) cruise definition doesn't hit UNIQUE violations.
+            for mode in await crud_modes.list_modes(session):
+                await crud_modes.delete_mode(session, mode["id"])
+            for logger in await crud_loggers.list_loggers(session):
+                await crud_loggers.delete_logger(session, logger["id"])
+            for cfg in await crud_configs.list_configs(session):
+                await crud_configs.delete_config(session, cfg["id"])
+
             # 1. Cruise
             cruise = await crud_cruise.upsert_cruise(
                 session,
