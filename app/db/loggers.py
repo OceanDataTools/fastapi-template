@@ -35,11 +35,13 @@ class LoggerCRUD(CachedAsyncCRUDBase):
     # ---------- serialization ----------
 
     def _serialize(self, logger: Logger) -> Dict[str, Any]:
+        states = getattr(logger, "config_states", [])
+        latest = max(states, key=lambda s: s.timestamp) if states else None
         return {
             "id": logger.id,
-            "description": getattr(logger, "description", None),
-            "config_ids": [cfg.id for cfg in getattr(logger, "configs", [])],
-            "config_state_ids": [s.id for s in getattr(logger, "config_states", [])],
+            "configs": [{"id": cfg.id} for cfg in getattr(logger, "configs", [])],
+            "active_config": latest.config_id if latest else None,
+            "running": bool(latest.running) if latest else False,
         }
 
     # ---------- read ----------
@@ -187,12 +189,14 @@ class LoggerCRUD(CachedAsyncCRUDBase):
         if not logger:
             raise NoResultFound(f"Logger {logger_id} not found")
 
+        serialized = self._serialize(logger)
+
         await session.delete(logger)
         await session.flush()
 
         await self._invalidate(self._key_all(), self._key_by_id(logger_id))
 
-        return self._serialize(logger) if return_serialized else logger
+        return serialized if return_serialized else logger
 
     # ---------- config assignment ----------
 
@@ -235,7 +239,7 @@ class LoggerCRUD(CachedAsyncCRUDBase):
             return []
 
         # Gather all unique config IDs
-        config_ids = {cfg_id for l in loggers for cfg_id in l.get("config_ids", [])}
+        config_ids = {c["id"] for l in loggers for c in l.get("configs", [])}
 
         config_map = {}
         if config_ids:
@@ -256,7 +260,7 @@ class LoggerCRUD(CachedAsyncCRUDBase):
         for logger in loggers:
             logger_copy = copy.deepcopy(logger)
             logger_copy["configs"] = [
-                config_map[cfg_id] for cfg_id in logger.get("config_ids", []) if cfg_id in config_map
+                config_map[c["id"]] for c in logger.get("configs", []) if c["id"] in config_map
             ]
             hydrated_loggers.append(logger_copy)
 

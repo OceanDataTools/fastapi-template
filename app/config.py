@@ -42,6 +42,9 @@ class Settings(BaseSettings):
             f"{data.get('postgres_db')}"
         )
 
+    cached_data_server_host: str = "localhost"
+    cached_data_server_port: int = 8766
+
     default_admin_username: Optional[str] = "admin"
     default_admin_password: Optional[str] = "admin"
     default_admin_fullname: Optional[str] = "Administrator"

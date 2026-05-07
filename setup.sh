@@ -57,6 +57,12 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 FRONTEND_URL=http://localhost:5173
 
 ###############################################################################
+# CachedDataServer proxy settings
+###############################################################################
+CACHED_DATA_SERVER_HOST=localhost
+CACHED_DATA_SERVER_PORT=8766
+
+###############################################################################
 # Set to Production before deploying
 ###############################################################################
 ENVIRONMENT=Development
