@@ -242,6 +242,8 @@ class ModeCRUD(CachedAsyncCRUDBase):
         if not mode:
             raise NoResultFound(f"Mode {mode_id} not found")
 
+        serialized = self._serialize(mode)
+
         await session.delete(mode)
         await session.flush()
 
@@ -251,7 +253,7 @@ class ModeCRUD(CachedAsyncCRUDBase):
         if mode.active:
             await self._invalidate(self._key_active())
 
-        return self._serialize(mode) if return_serialized else mode
+        return serialized if return_serialized else mode
 
     async def set_default_mode(
         self,

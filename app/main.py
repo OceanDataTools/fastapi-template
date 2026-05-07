@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
 
-from app.api import apikeys, auth, configuration, configs, cruise, examples, loggers, modes, profile, users
+from app.api import apikeys, auth, configuration, configs, cruise, data_server, examples, loggers, modes, profile, updates, users
 from app.config import settings
 from app.deps import get_current_user
 from async_fastapi_server_api import AsyncFastAPIServerAPI
@@ -96,3 +96,5 @@ app.include_router(cruise.router)
 app.include_router(modes.router)
 app.include_router(loggers.router)
 app.include_router(configs.router)
+app.include_router(data_server.router)
+app.include_router(updates.router)

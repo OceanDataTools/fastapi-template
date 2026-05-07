@@ -24,6 +24,7 @@ class CruiseUpdate(CruiseBase):
 
 class CruiseRead(CruiseBase):
     cruise_id: str
+    config_file_changed: bool = False
 
     model_config = {"from_attributes": True, "extra": Extra.ignore}
 
@@ -101,13 +102,9 @@ class LoggerOut(BaseModel):
     def serialize_configs(self, v, info):
         return [c.id for c in v]
 
-    # Compute from LoggerConfigState.running
     @field_serializer("active_config")
     def serialize_active_config(self, v, info):
-        for state in getattr(self, "config_states", []):
-            if state.running:
-                return state.config_id
-        return None
+        return v
 
 
 # -------------------

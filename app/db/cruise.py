@@ -23,6 +23,7 @@ class CruiseCRUD(CachedAsyncCRUDBase):
             "start": cruise.start,
             "end": cruise.end,
             "config_filename": cruise.config_filename,
+            "config_mtime_baseline": cruise.config_mtime_baseline,
             "loaded_time": cruise.loaded_time,
         }
 
@@ -78,6 +79,17 @@ class CruiseCRUD(CachedAsyncCRUDBase):
         serialized = self._serialize_cruise(cruise)
         await self._invalidate(self._cache_key)
         return serialized
+
+    async def set_config_mtime_baseline(
+        self, session: AsyncSession, mtime: Optional[float]
+    ) -> None:
+        result = await session.execute(select(Cruise))
+        cruise: Optional[Cruise] = result.scalar_one_or_none()
+        if cruise is None:
+            return
+        cruise.config_mtime_baseline = mtime
+        await session.flush()
+        await self._invalidate(self._cache_key)
 
     async def delete_cruise(self, session: AsyncSession) -> None:
         result = await session.execute(select(Cruise))

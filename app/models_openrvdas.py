@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, func, Index
+    Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Table, Text, func, Index
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models import Base
@@ -29,6 +29,7 @@ class Cruise(Base):
     start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     config_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    config_mtime_baseline: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     loaded_time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -46,7 +47,7 @@ class Logger(Base):
 
     configs: Mapped[List[Config]] = relationship("Config", back_populates="logger")
     config_states: Mapped[List[LoggerConfigState]] = relationship(
-        "LoggerConfigState", back_populates="logger", passive_deletes=True
+        "LoggerConfigState", back_populates="logger", passive_deletes="all"
     )
 
     def __repr__(self):
@@ -73,7 +74,7 @@ class Config(Base):
     )
 
     states: Mapped[List[LoggerConfigState]] = relationship(
-        "LoggerConfigState", back_populates="config", passive_deletes=True
+        "LoggerConfigState", back_populates="config", passive_deletes="all"
     )
 
     active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

@@ -24,9 +24,6 @@ async def get_logger(
 ):
     logger = await crud_loggers.get_logger(session, logger_id)
 
-    for s in logger["config_states"]:
-        print(s.config_id, s.running)
-
     if not logger:
         raise HTTPException(status_code=404, detail="Logger not found")
     return logger
