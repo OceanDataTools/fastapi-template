@@ -165,10 +165,16 @@ class ConfigCRUD(CachedAsyncCRUDBase):
     async def delete_config(
         self, session: AsyncSession, config_id: str, return_serialized: bool = True
     ) -> Optional[Dict[str, Any]]:
-        result = await session.execute(select(Config).where(Config.id == config_id))
+        result = await session.execute(
+            select(Config)
+            .where(Config.id == config_id)
+            .options(selectinload(Config.modes), selectinload(Config.states))
+        )
         config = result.scalar_one_or_none()
         if not config:
             raise NoResultFound(f"Config {config_id} not found")
+
+        serialized = self._serialize(config)
 
         await session.delete(config)
         await session.flush()
@@ -176,7 +182,7 @@ class ConfigCRUD(CachedAsyncCRUDBase):
         await self._invalidate(self._key_all())
         await self._invalidate(self._key_by_id(config_id))
 
-        return self._serialize(config) if return_serialized else config
+        return serialized if return_serialized else config
 
 
     # ---------- Hydration ----------
