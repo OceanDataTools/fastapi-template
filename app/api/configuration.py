@@ -107,16 +107,29 @@ async def extract_configuration(
 
 
 def _resolve_config_path(config_filepath: str) -> Path:
-    """Validate and resolve a config file path, raising HTTPException on bad input."""
-    parts = Path(config_filepath).parts
+    """Validate and resolve a config file path, raising HTTPException on bad input.
+
+    Accepts both absolute paths (must be inside the OpenRVDAS root) and relative
+    paths (must start with an allowed root such as 'local/' or 'test/').
+    """
+    openrvdas = _OPENRVDAS_DIR.resolve()
+    p = Path(config_filepath)
+
+    if p.is_absolute():
+        try:
+            p = p.relative_to(openrvdas)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Path traversal not allowed")
+
+    parts = p.parts
     if not parts or parts[0] not in _ALLOWED_ROOTS:
         raise HTTPException(
             status_code=400,
             detail=f"Path must start with one of: {', '.join(sorted(_ALLOWED_ROOTS))}",
         )
-    target = (_OPENRVDAS_DIR / config_filepath).resolve()
+    target = (openrvdas / p).resolve()
     try:
-        target.relative_to(_OPENRVDAS_DIR.resolve())
+        target.relative_to(openrvdas)
     except ValueError:
         raise HTTPException(status_code=400, detail="Path traversal not allowed")
     if not target.exists():
@@ -155,7 +168,7 @@ async def preview_configuration(config_filepath: str) -> dict[str, Any]:
     try:
         cfg = read_config(str(target))
         if cfg:
-            cfg = expand_cruise_definition(cfg)
+            cfg = expand_cruise_definition(cfg, errors=errors)
     except Exception as e:
         errors.append(str(e))
     finally:
