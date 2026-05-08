@@ -1,3 +1,4 @@
+import logging
 import sys
 from os.path import dirname, realpath
 from pathlib import Path
@@ -103,6 +104,64 @@ async def extract_configuration(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ingest failed: {e}")
+
+
+def _resolve_config_path(config_filepath: str) -> Path:
+    """Validate and resolve a config file path, raising HTTPException on bad input."""
+    parts = Path(config_filepath).parts
+    if not parts or parts[0] not in _ALLOWED_ROOTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path must start with one of: {', '.join(sorted(_ALLOWED_ROOTS))}",
+        )
+    target = (_OPENRVDAS_DIR / config_filepath).resolve()
+    try:
+        target.relative_to(_OPENRVDAS_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Path traversal not allowed")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Config file not found")
+    return target
+
+
+@router.post(
+    "/preview",
+    dependencies=[Depends(apikey_or_jwt_required())],
+)
+async def preview_configuration(config_filepath: str) -> dict[str, Any]:
+    """Parse and expand a config file without writing to the database.
+
+    Returns the processed config dict plus any errors and warnings captured
+    from the read_config / expand_cruise_definition pipeline so the UI can
+    show the user what would be applied and gate the Apply button on zero errors.
+    """
+    target = _resolve_config_path(config_filepath)
+
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            msg = record.getMessage()
+            if record.levelno >= logging.ERROR:
+                errors.append(msg)
+            elif record.levelno >= logging.WARNING:
+                warnings.append(msg)
+
+    handler = _Capture()
+    root_logger = logging.getLogger()
+    root_logger.addHandler(handler)
+    cfg: dict[str, Any] = {}
+    try:
+        cfg = read_config(str(target))
+        if cfg:
+            cfg = expand_cruise_definition(cfg)
+    except Exception as e:
+        errors.append(str(e))
+    finally:
+        root_logger.removeHandler(handler)
+
+    return {"config": cfg, "errors": errors, "warnings": warnings}
 
 
 @router.post(
