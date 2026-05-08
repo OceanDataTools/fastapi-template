@@ -15,6 +15,7 @@ from app.deps import get_async_server_api, get_async_session
 sys.path.append(dirname(dirname(dirname(dirname(realpath(__file__))))))
 # Read in JSON with comments
 from logger.utils.read_config import expand_cruise_definition, read_config  # noqa: E402
+from logger.utils.check_parse_format import check_parse_format  # noqa: E402
 
 from async_fastapi_server_api import AsyncFastAPIServerAPI  # noqa: E402
 
@@ -235,3 +236,35 @@ async def load_configuration(
     await session.commit()
 
     return str(cfg)
+
+
+@router.post(
+    "/verify-parser",
+    dependencies=[Depends(apikey_or_jwt_required())],
+)
+async def verify_parser_format(
+    format_string: str,
+    raw_string: str,
+) -> dict[str, Any]:
+    """Check whether a PyPi parse format string matches a raw data string.
+
+    Returns:
+      - full_match: True if the entire string matched
+      - parsed: dict of field name -> value for matched fields
+      - max_span: character index in raw_string where the partial match ends (None on full match or no match)
+      - partial_format: the portion of format_string that produced a partial match (None otherwise)
+    """
+    try:
+        parsed, max_span, partial_format = check_parse_format(format_string, raw_string)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if parsed is None:
+        return {"full_match": False, "parsed": {}, "max_span": None, "partial_format": None}
+
+    return {
+        "full_match": max_span is None,
+        "parsed": parsed,
+        "max_span": max_span,
+        "partial_format": partial_format,
+    }
