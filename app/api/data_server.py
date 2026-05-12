@@ -1,67 +1,79 @@
 import asyncio
-import logging
 
 import jwt
 import websockets
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, status
+from fastapi.websockets import WebSocketState
 
 from app.auth import ALGORITHM, SECRET_KEY
+from app.config import settings
 
-logger = logging.getLogger(__name__)
-
-router = APIRouter(tags=["Data Server"])
+router = APIRouter(prefix="/api/v1/ws", tags=["Data Server"])
 
 
-@router.websocket("/api/v1/data-server/ws")
-async def data_server_proxy(
+@router.websocket("/data-server")
+async def websocket_data_server_proxy(
     websocket: WebSocket,
     token: str = Query(...),
 ):
-    """Authenticated WebSocket proxy to the CachedDataServer."""
+    """Authenticated WebSocket proxy to the CachedDataServer.
+
+    Browsers cannot set custom headers on WebSocket connections, so the JWT
+    is passed as a query parameter: ws://<host>/api/v1/ws/data-server?token=<jwt>
+
+    Once authenticated, all JSON messages are forwarded transparently in both
+    directions, preserving the full CachedDataServer subscribe/ready/data protocol.
+    """
     try:
-        jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if not payload.get("sub"):
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
     except jwt.PyJWTError:
-        await websocket.close(code=1008)
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
     await websocket.accept()
 
-    from app.config import settings
-    ds_url = f"ws://{settings.cached_data_server_host}:{settings.cached_data_server_port}"
+    cds_url = f"ws://{settings.cached_data_server_host}:{settings.cached_data_server_port}"
 
     try:
-        async with websockets.connect(ds_url) as ds_ws:
+        async with websockets.connect(cds_url) as cds_ws:
 
-            async def client_to_ds():
+            async def client_to_cds():
                 try:
                     while True:
-                        msg = await websocket.receive_text()
-                        await ds_ws.send(msg)
-                except (WebSocketDisconnect, Exception):
+                        data = await websocket.receive_text()
+                        await cds_ws.send(data)
+                except Exception:
                     pass
 
-            async def ds_to_client():
+            async def cds_to_client():
                 try:
-                    async for msg in ds_ws:
-                        text = msg if isinstance(msg, str) else msg.decode()
-                        await websocket.send_text(text)
+                    async for message in cds_ws:
+                        if websocket.client_state == WebSocketState.CONNECTED:
+                            await websocket.send_text(message)
+                        else:
+                            break
                 except Exception:
                     pass
 
             done, pending = await asyncio.wait(
                 [
-                    asyncio.create_task(client_to_ds()),
-                    asyncio.create_task(ds_to_client()),
+                    asyncio.create_task(client_to_cds()),
+                    asyncio.create_task(cds_to_client()),
                 ],
                 return_when=asyncio.FIRST_COMPLETED,
             )
             for task in pending:
                 task.cancel()
 
-    except Exception as e:
-        logger.warning("Data server proxy error: %s", e)
-
-    try:
-        await websocket.close()
-    except Exception:
-        pass
+    except OSError:
+        # CachedDataServer not reachable
+        if websocket.client_state == WebSocketState.CONNECTED:
+            await websocket.send_text(
+                '{"type":"error","status":503,"message":"CachedDataServer unavailable"}'
+            )
+    finally:
+        if websocket.client_state == WebSocketState.CONNECTED:
+            await websocket.close()
