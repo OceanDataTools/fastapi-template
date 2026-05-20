@@ -94,6 +94,7 @@ class LoggerOut(BaseModel):
     id: str
     configs: List[ConfigRef] = Field(default_factory=list)
     active_config: Optional[str] = None
+    running: bool = False
 
     model_config = {"from_attributes": True, "extra": Extra.ignore}
 

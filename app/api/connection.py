@@ -89,7 +89,7 @@ async def _stream_serial(port: str, baud_rate: int, duration: int) -> AsyncGener
         return
 
     queue: asyncio.Queue[str | None] = asyncio.Queue()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def _read() -> None:
         try:
@@ -121,7 +121,7 @@ async def _stream_serial(port: str, baud_rate: int, duration: int) -> AsyncGener
 
 async def _stream_udp(host: str, port: int, duration: int) -> AsyncGenerator[str, None]:
     queue: asyncio.Queue[str | None] = asyncio.Queue()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def _read() -> None:
         try:
@@ -161,13 +161,13 @@ async def _stream_cds(key: str, url: str, duration: int) -> AsyncGenerator[str, 
 
     ws_url = url if url.startswith("ws://") or url.startswith("wss://") else f"ws://{url}"
     subscription = json.dumps({"type": "subscribe", "fields": {key: {"seconds": 0}}})
-    deadline = asyncio.get_event_loop().time() + duration
+    deadline = asyncio.get_running_loop().time() + duration
     count = 0
 
     try:
         async with websockets.connect(ws_url) as ws:
             await ws.send(subscription)
-            while asyncio.get_event_loop().time() < deadline and count < _MAX_MESSAGES:
+            while asyncio.get_running_loop().time() < deadline and count < _MAX_MESSAGES:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
                     data = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
