@@ -31,8 +31,13 @@ pyserial = "^3.5"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0"
-pytest-asyncio = "^1.0"  # sqlite
+pytest-asyncio = "^1.0"
+httpx = "^0.28"
 pre-commit = "^4.3.0"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
 
 [tool.black]
 line-length = 88

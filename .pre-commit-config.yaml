@@ -31,3 +31,12 @@ repos:
     hooks:
       - id: mypy
         files: ^app/.*\.py$
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: poetry run pytest tests/ -q --tb=short
+        language: system
+        pass_filenames: false
+        always_run: true
