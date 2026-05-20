@@ -4,7 +4,9 @@ from os.path import dirname, realpath
 from pathlib import Path
 from typing import Any
 
+import yaml
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import apikey_or_jwt_required
@@ -14,7 +16,7 @@ from app.deps import get_async_server_api, get_async_session
 
 sys.path.append(dirname(dirname(dirname(dirname(realpath(__file__))))))
 # Read in JSON with comments
-from logger.utils.read_config import expand_cruise_definition, read_config  # noqa: E402
+from logger.utils.read_config import expand_cruise_definition, expand_templates, read_config  # noqa: E402
 from logger.utils.check_parse_format import check_parse_format  # noqa: E402
 
 from async_fastapi_server_api import AsyncFastAPIServerAPI  # noqa: E402
@@ -237,6 +239,55 @@ async def load_configuration(
     await session.commit()
 
     return str(cfg)
+
+
+class _RenderTemplateRequest(BaseModel):
+    template_yaml: str
+    config_yaml: str
+
+
+@router.post(
+    "/render-template",
+    dependencies=[Depends(apikey_or_jwt_required())],
+)
+async def render_template(body: _RenderTemplateRequest) -> dict[str, Any]:
+    """Merge two YAML snippets and expand any template references.
+
+    ``template_yaml`` should contain ``logger_templates``, ``config_templates``,
+    and/or ``variables`` keys.  ``config_yaml`` should contain a ``loggers``
+    key whose entries reference those templates.  The two dicts are merged and
+    passed through ``expand_templates()``.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            msg = record.getMessage()
+            if record.levelno >= logging.ERROR:
+                errors.append(msg)
+            elif record.levelno >= logging.WARNING:
+                warnings.append(msg)
+
+    handler = _Capture()
+    root_logger = logging.getLogger()
+    root_logger.addHandler(handler)
+    result: dict[str, Any] = {}
+    try:
+        template_dict = yaml.safe_load(body.template_yaml) or {}
+        config_dict = yaml.safe_load(body.config_yaml) or {}
+        if not isinstance(template_dict, dict):
+            raise ValueError("Template YAML must be a mapping")
+        if not isinstance(config_dict, dict):
+            raise ValueError("Config YAML must be a mapping")
+        merged = {**template_dict, **config_dict}
+        result = expand_templates(merged, errors=errors)
+    except Exception as e:
+        errors.append(str(e))
+    finally:
+        root_logger.removeHandler(handler)
+
+    return {"result": result, "errors": errors, "warnings": warnings}
 
 
 @router.post(
