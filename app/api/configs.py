@@ -46,7 +46,7 @@ async def activate_config(
         state = await server_api.set_active_logger_config(
             config["logger_id"], config_id
         )
-        logging.warning(f"state {state}")
+        logging.debug(f"state {state}")
     except NoResultFound as e:
         raise HTTPException(status_code=422, detail=str(e))
 

@@ -53,7 +53,4 @@ class Settings(BaseSettings):
     model_config = {"env_file": ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
-print("ENV FILE:", ENV_FILE)
-print("ENV EXISTS:", Path(ENV_FILE).exists())
-
 settings = Settings()
