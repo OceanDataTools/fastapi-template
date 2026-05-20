@@ -199,13 +199,14 @@ class AsyncFastAPIServerAPI:
     async def get_status(self, since_timestamp: Optional[datetime] = None):
         async def _inner(session):
             if since_timestamp is None:
+                # Returns {logger_id: single_state_dict}
                 states = await crud_logger_config_state.get_latest_status_per_logger(session)
+                flat = list(states.values())
             else:
+                # Returns {logger_id: [list_of_state_dicts]}
                 states = await crud_logger_config_state.get_status_since_per_logger(session, since_timestamp)
-            # flatten and reformat
-            return await crud_logger_config_state.reformat_status_by_timestamp_with_names(
-                [s for states_list in states.values() for s in states_list]
-            )
+                flat = [s for states_list in states.values() for s in states_list]
+            return await crud_logger_config_state.reformat_status_by_timestamp_with_names(flat)
         return await self._with_session(_inner)
 
     async def get_message_log(self, source=None, user=None, log_level=sys.maxsize, since_timestamp=None):
