@@ -26,7 +26,7 @@ async def websocket_data_server_proxy(
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if not payload.get("sub"):
+        if not payload.get("sub") or payload.get("type") == "refresh":
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
     except jwt.PyJWTError:

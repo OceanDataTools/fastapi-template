@@ -213,7 +213,8 @@ async def load_configuration(
         previous_mode_id = None
 
     try:
-        cfg = read_config(config_filepath)
+        target = _resolve_config_path(config_filepath)
+        cfg = read_config(str(target))
         cfg = expand_cruise_definition(cfg)
         cfg["cruise"]["config_filename"] = config_filepath
 
@@ -229,7 +230,7 @@ async def load_configuration(
 
     # Record the file's mtime at load time as the change-detection baseline
     try:
-        mtime = (_OPENRVDAS_DIR / config_filepath).stat().st_mtime
+        mtime = target.stat().st_mtime
     except OSError:
         mtime = None
     await crud_cruise.set_config_mtime_baseline(session, mtime)
