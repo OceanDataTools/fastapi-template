@@ -1,6 +1,7 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import logger_crud as crud_loggers
@@ -22,8 +23,8 @@ async def get_logger(
     logger_id: str,
     session: AsyncSession = Depends(get_async_session),
 ):
-    logger = await crud_loggers.get_logger(session, logger_id)
-
-    if not logger:
+    try:
+        logger = await crud_loggers.get_logger(session, logger_id)
+    except NoResultFound:
         raise HTTPException(status_code=404, detail="Logger not found")
     return logger
