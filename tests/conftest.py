@@ -108,6 +108,8 @@ os.environ["DEFAULT_ADMIN_FULLNAME"] = "Test Admin"
 os.environ["DEFAULT_ADMIN_EMAIL"] = "admin@test.example"
 # ──────────────────────────────────────────────────────────────────────────────
 
+from unittest.mock import AsyncMock
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
@@ -117,9 +119,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
 from app.auth import create_access_jwt, create_refresh_jwt
-from app.deps import get_async_session
+from app.deps import get_async_server_api, get_async_session
 from app.main import app
 from app.models import Base, Role
+from app import models_openrvdas as _models_openrvdas  # noqa: F401 — registers ORM tables on Base.metadata
 from app.utils import get_password_hash
 from app.db.users import create_user
 
@@ -240,21 +243,33 @@ async def _override_get_session():
         yield session
 
 
+class _AsyncServerAPIMock:
+    """Stub that satisfies get_async_server_api without the real lifespan."""
+    def __getattr__(self, name):
+        return AsyncMock(return_value=None)
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 @pytest_asyncio.fixture
 async def db_session():
-    """Async SQLAlchemy session connected to the test database."""
+    """Async SQLAlchemy session connected to the test database.
+
+    Use this in tests that need to seed data before making API calls.
+    Each test gets a fresh session; data persists for the life of the session.
+    """
     async with _TestSession() as session:
         yield session
 
 
 @pytest_asyncio.fixture
 async def client():
-    """AsyncClient wired to the FastAPI app with the test DB."""
+    """AsyncClient wired to the FastAPI app with the test DB and a mocked
+    AsyncFastAPIServerAPI (so the OpenRVDAS lifespan need not run)."""
     app.dependency_overrides[get_async_session] = _override_get_session
+    app.dependency_overrides[get_async_server_api] = lambda: _AsyncServerAPIMock()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()

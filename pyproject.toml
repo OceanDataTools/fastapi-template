@@ -31,7 +31,8 @@ pyserial = "^3.5"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0"
-pytest-asyncio = "^1.0"  # sqlite
+pytest-asyncio = "^1.0"
+httpx = "^0.28"
 pre-commit = "^4.3.0"
 black = "^25.0"
 isort = "^5.13"
@@ -43,6 +44,10 @@ types-PyYAML = "^6.0"
 plugins = ["pydantic.mypy"]
 explicit_package_bases = true
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
