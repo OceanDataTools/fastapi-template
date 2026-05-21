@@ -6,6 +6,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 FastAPI-based backend providing JWT + API key authentication and user management. Designed to be extended with application-specific routes. Supports both SQLite (development) and PostgreSQL/TimescaleDB (production).
 
+## Submodule & Git Workflow
+
+`web_backend` and `web_frontend` are git submodules of the parent `openrvdas` repo. Their HEADs are detached by default; all branch work lives on the `openrvdas` branch.
+
+After committing changes in a submodule:
+
+```bash
+git switch openrvdas           # reattach HEAD
+git merge --ff-only <sha>      # fast-forward to your commit
+git push origin openrvdas
+```
+
+Then update the parent repo's submodule pointer:
+
+```bash
+git -C /opt/openrvdas add web_backend web_frontend
+git -C /opt/openrvdas commit -m "Update submodules: ..."
+git -C /opt/openrvdas push origin <branch>
+```
+
+**Always run `poetry` from `/opt/openrvdas/web_backend`.** The parent repo has its own `/opt/openrvdas/pyproject.toml` (OpenRVDAS core deps). Running poetry from the repo root or `web_frontend` will pick that file up instead and resolve the wrong dependency set.
+
+## Testing
+
+```bash
+poetry run pytest tests/ -q --tb=short
+```
+
+61 tests cover auth, loggers, configuration endpoints, WebSocket token validation, connection streaming, and `get_status`. The pre-commit hook runs them automatically on every commit.
+
+**Cache invalidation in tests:** `CachedAsyncCRUDBase` caches DB reads in memory. Direct DB inserts (seeding test data) bypass the CRUD write path and won't invalidate the cache automatically. After seeding, call `await <crud>._invalidate()` for each affected CRUD object, otherwise the API will return stale data.
+
 ## Setup & Running
 
 ```bash
