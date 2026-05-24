@@ -35,6 +35,15 @@ pytest = "^9.0"
 pytest-asyncio = "^1.0"
 httpx = "^0.28"
 pre-commit = "^4.3.0"
+black = "^25.0"
+isort = "^5.13"
+flake8 = "^7.0"
+mypy = "^1.10"
+types-PyYAML = "^6.0"
+
+[tool.mypy]
+explicit_package_bases = true
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

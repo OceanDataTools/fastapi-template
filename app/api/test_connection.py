@@ -15,33 +15,45 @@ from app.auth import ALGORITHM, SECRET_KEY
 
 sys.path.insert(0, dirname(dirname(dirname(dirname(realpath(__file__))))))
 
-from logger.readers import (  # noqa: E402
-    CachedDataReader,
-    ComposedReader,
-    LogfileReader,
-    NetworkReader,
-    SerialReader,
-    TCPReader,
-    TextFileReader,
-    TimeoutReader,
-    UDPReader,
-    SocketReader,
-)
+try:
+    from logger.readers import (  # noqa: E402
+        CachedDataReader,
+        ComposedReader,
+        LogfileReader,
+        NetworkReader,
+        SerialReader,
+        SocketReader,
+        TCPReader,
+        TextFileReader,
+        TimeoutReader,
+        UDPReader,
+    )
+
+    _OPENRVDAS_AVAILABLE = True
+except ImportError:
+    _OPENRVDAS_AVAILABLE = False
+    CachedDataReader = ComposedReader = LogfileReader = NetworkReader = None  # type: ignore[assignment,misc]
+    SerialReader = TCPReader = TextFileReader = TimeoutReader = None  # type: ignore[assignment,misc]
+    UDPReader = SocketReader = None  # type: ignore[assignment,misc]
 
 router = APIRouter(prefix="/api/v1/ws", tags=["Test Connection"])
 
-_READER_CLASSES: dict = {
-    "CachedDataReader": CachedDataReader,
-    "ComposedReader": ComposedReader,
-    "LogfileReader": LogfileReader,
-    "NetworkReader": NetworkReader,
-    "SerialReader": SerialReader,
-    "TCPReader": TCPReader,
-    "TextFileReader": TextFileReader,
-    "TimeoutReader": TimeoutReader,
-    "UDPReader": UDPReader,
-    "SocketReader": SocketReader,
-}
+_READER_CLASSES: dict = (
+    {}
+    if not _OPENRVDAS_AVAILABLE
+    else {
+        "CachedDataReader": CachedDataReader,
+        "ComposedReader": ComposedReader,
+        "LogfileReader": LogfileReader,
+        "NetworkReader": NetworkReader,
+        "SerialReader": SerialReader,
+        "TCPReader": TCPReader,
+        "TextFileReader": TextFileReader,
+        "TimeoutReader": TimeoutReader,
+        "UDPReader": UDPReader,
+        "SocketReader": SocketReader,
+    }
+)
 
 
 def _instantiate_reader(config: dict):
@@ -131,7 +143,9 @@ async def websocket_test_connection(
 
         await websocket.send_json({"type": "status", "message": "started"})
 
-        reader_thread = threading.Thread(target=reader_loop, args=(reader,), daemon=True)
+        reader_thread = threading.Thread(
+            target=reader_loop, args=(reader,), daemon=True
+        )
         reader_thread.start()
 
         # Pump records to the client while listening for stop
