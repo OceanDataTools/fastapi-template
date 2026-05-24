@@ -45,6 +45,8 @@ poetry run mypy app/
 
 Pre-commit hooks run black, isort, flake8, and mypy automatically on commit.
 
+**Python version:** Keep `target-version` in `[tool.black]` (and the `python = "^X.Y"` constraint in `[tool.poetry.dependencies]`) in sync with the minimum Python version that OpenRVDAS ships on production. Don't bump these to match a dev machine's Python version.
+
 ## Architecture
 
 ### Request Flow

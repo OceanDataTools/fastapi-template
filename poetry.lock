@@ -1563,7 +1563,7 @@ description = "C parser in Python"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "implementation_name != \"PyPy\" and platform_python_implementation != \"PyPy\""
+markers = "platform_python_implementation != \"PyPy\" and implementation_name != \"PyPy\""
 files = [
     {file = "pycparser-3.0-py3-none-any.whl", hash = "sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992"},
     {file = "pycparser-3.0.tar.gz", hash = "sha256:600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29"},
@@ -2494,6 +2494,18 @@ rich = ">=12.3.0"
 shellingham = ">=1.3.0"
 
 [[package]]
+name = "types-pyyaml"
+version = "6.0.12.20260518"
+description = "Typing stubs for PyYAML"
+optional = false
+python-versions = ">=3.10"
+groups = ["dev"]
+files = [
+    {file = "types_pyyaml-6.0.12.20260518-py3-none-any.whl", hash = "sha256:d2150f75a231c9fe9c7463bd29487d93e60bac90400287351384bc2284eba7cd"},
+    {file = "types_pyyaml-6.0.12.20260518.tar.gz", hash = "sha256:d917f83fb38462550338c1297faedd860b3ec83912b96b1e3d73255f7473e466"},
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 description = "Backported and Experimental Type Hints for Python 3.9+"
@@ -2874,4 +2886,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "f8989907ef777ae9a73c15af556478a8a772e399336a17ef24670c9f30ed547c"
+content-hash = "77f9d6bf5a546c404dd78bfe14c794c13dad3419d4dcced5b66c19028cd9fec8"
