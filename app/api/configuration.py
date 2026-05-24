@@ -7,19 +7,38 @@ from typing import Any
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import apikey_or_jwt_required
-from app.db import cruise_crud as crud_cruise, mode_crud as crud_modes
-from sqlalchemy.exc import NoResultFound
+from app.db import cruise_crud as crud_cruise
+from app.db import mode_crud as crud_modes
 from app.deps import get_async_server_api, get_async_session
 
 sys.path.append(dirname(dirname(dirname(dirname(realpath(__file__))))))
-# Read in JSON with comments
-from logger.utils.read_config import expand_cruise_definition, expand_templates, read_config  # noqa: E402
-from logger.utils.check_parse_format import check_parse_format  # noqa: E402
 
 from async_fastapi_server_api import AsyncFastAPIServerAPI  # noqa: E402
+
+try:
+    # Available only when running inside an OpenRVDAS installation.
+    from logger.utils.check_parse_format import check_parse_format  # noqa: E402
+    from logger.utils.read_config import (  # noqa: E402
+        expand_cruise_definition,
+        expand_templates,
+        read_config,
+    )
+
+    _OPENRVDAS_AVAILABLE = True
+except ImportError:
+    _OPENRVDAS_AVAILABLE = False
+
+
+def _require_openrvdas() -> None:
+    if not _OPENRVDAS_AVAILABLE:
+        raise HTTPException(
+            status_code=503, detail="OpenRVDAS is not installed on this host"
+        )
+
 
 router = APIRouter(prefix="/api/v1/configuration", tags=["Configuration"])
 
@@ -75,19 +94,23 @@ async def list_config_files(path: str = Query(default="")) -> dict[str, Any]:
             files.append(item)
 
     for item in sorted(dirs, key=lambda p: p.name):
-        entries.append({
-            "name": item.name,
-            "type": "dir",
-            "rel_path": str(item.relative_to(openrvdas)),
-            "abs_path": None,
-        })
+        entries.append(
+            {
+                "name": item.name,
+                "type": "dir",
+                "rel_path": str(item.relative_to(openrvdas)),
+                "abs_path": None,
+            }
+        )
     for item in sorted(files, key=lambda p: p.name):
-        entries.append({
-            "name": item.name,
-            "type": "file",
-            "rel_path": str(item.relative_to(openrvdas)),
-            "abs_path": str(item),
-        })
+        entries.append(
+            {
+                "name": item.name,
+                "type": "file",
+                "rel_path": str(item.relative_to(openrvdas)),
+                "abs_path": str(item),
+            }
+        )
 
     return {"path": path, "entries": entries}
 
@@ -152,6 +175,7 @@ async def preview_configuration(config_filepath: str) -> dict[str, Any]:
     show the user what would be applied and gate the Apply button on zero errors.
     """
     target = _resolve_config_path(config_filepath)
+    _require_openrvdas()
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -216,6 +240,7 @@ async def load_configuration(
 
     try:
         target = _resolve_config_path(config_filepath)
+        _require_openrvdas()
         cfg = read_config(str(target))
         cfg = expand_cruise_definition(cfg)
         cfg["cruise"]["config_filename"] = config_filepath
@@ -258,6 +283,7 @@ async def render_template(body: _RenderTemplateRequest) -> dict[str, Any]:
     key whose entries reference those templates.  The two dicts are merged and
     passed through ``expand_templates()``.
     """
+    _require_openrvdas()
     errors: list[str] = []
     warnings: list[str] = []
 
@@ -306,13 +332,19 @@ async def verify_parser_format(
       - max_span: character index in raw_string where the partial match ends (None on full match or no match)
       - partial_format: the portion of format_string that produced a partial match (None otherwise)
     """
+    _require_openrvdas()
     try:
         parsed, max_span, partial_format = check_parse_format(format_string, raw_string)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     if parsed is None:
-        return {"full_match": False, "parsed": {}, "max_span": None, "partial_format": None}
+        return {
+            "full_match": False,
+            "parsed": {},
+            "max_span": None,
+            "partial_format": None,
+        }
 
     return {
         "full_match": max_span is None,

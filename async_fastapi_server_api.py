@@ -15,7 +15,16 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import NoResultFound
 
 sys.path.append(dirname(dirname(realpath(__file__))))
-from logger.utils.timestamp import datetime_obj, DATE_FORMAT  # noqa: E402
+try:
+    from logger.utils.timestamp import datetime_obj, DATE_FORMAT  # noqa: E402
+except ImportError:
+    DATE_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"  # type: ignore[assignment]
+
+    def datetime_obj(timestring: Any, time_format: str = DATE_FORMAT) -> Optional[datetime]:  # type: ignore[misc]
+        try:
+            return datetime.strptime(timestring, time_format)
+        except Exception:
+            return None
 
 sys.path.append(dirname(realpath(__file__)))
 from app.db.session import AsyncSessionLocal
