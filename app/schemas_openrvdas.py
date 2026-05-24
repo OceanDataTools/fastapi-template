@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Extra, Field, computed_field, field_serializer
+from pydantic import BaseModel, Field, computed_field, field_serializer
 
 
 # -------------------
@@ -26,7 +26,7 @@ class CruiseRead(CruiseBase):
     cruise_id: str
     config_file_changed: bool = False
 
-    model_config = {"from_attributes": True, "extra": Extra.ignore}
+    model_config = {"from_attributes": True, "extra": "ignore"}
 
 
 # -------------------
@@ -35,13 +35,13 @@ class CruiseRead(CruiseBase):
 class ConfigRef(BaseModel):
     id: str
 
-    model_config = {"from_attributes": True, "extra": Extra.ignore}
+    model_config = {"from_attributes": True, "extra": "ignore"}
 
 
 class LoggerRef(BaseModel):
     id: str
 
-    model_config = {"from_attributes": True, "extra": Extra.ignore}
+    model_config = {"from_attributes": True, "extra": "ignore"}
 
 
 # -------------------
@@ -68,7 +68,7 @@ class ModeOut(ModeBase):
     default: bool
     configs: List[ConfigRef] = Field(default_factory=list)
 
-    model_config = {"from_attributes": True, "extra": Extra.ignore}
+    model_config = {"from_attributes": True, "extra": "ignore"}
 
     @field_serializer("configs")
     def serialize_configs(self, v, info):
@@ -96,7 +96,7 @@ class LoggerOut(BaseModel):
     active_config: Optional[str] = None
     running: bool = False
 
-    model_config = {"from_attributes": True, "extra": Extra.ignore}
+    model_config = {"from_attributes": True, "extra": "ignore"}
 
     # ORM Config -> string IDs
     @field_serializer("configs")
@@ -127,7 +127,7 @@ class ConfigUpdate(ConfigBase):
 
 class ConfigOut(ConfigBase):
 
-    model_config = {"from_attributes": True, "extra": Extra.ignore}
+    model_config = {"from_attributes": True, "extra": "ignore"}
 
     @computed_field  # type: ignore[prop-decorator]
     @property
