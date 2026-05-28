@@ -23,7 +23,7 @@ repos:
       - id: flake8
         files: ^app/.*\.py$
         args: [
-          "--ignore=E501",          # ignore "line too long"
+          "--ignore=E501,E203",     # E501: line too long; E203: conflicts with black slice formatting
         ]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
