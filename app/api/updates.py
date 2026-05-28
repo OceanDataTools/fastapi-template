@@ -12,9 +12,7 @@ from app.db.session import AsyncSessionLocal
 from app.models_openrvdas import LastUpdate
 
 # "2026-05-05 12:34:56,789Z 20 INFO logger_manager.py:360 some message"
-_LOG_RE = re.compile(
-    r"^(\S+Z)\s+(\d+)\s+(\w+)\s+(\S+)\s+(.*)$", re.DOTALL
-)
+_LOG_RE = re.compile(r"^(\S+Z)\s+(\d+)\s+(\w+)\s+(\S+)\s+(.*)$", re.DOTALL)
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +44,7 @@ async def _db_poll_loop(websocket: WebSocket) -> None:
 
         if last_ts is None:
             last_ts = ts
+            await websocket.send_json({"type": "update"})
         elif ts != last_ts:
             last_ts = ts
             await websocket.send_json({"type": "update"})
@@ -73,7 +72,9 @@ async def _cds_status_loop(websocket: WebSocket) -> None:
         if connected != last_cds:
             last_cds = connected
             try:
-                await websocket.send_json({"type": "status", "cds_connected": connected})
+                await websocket.send_json(
+                    {"type": "status", "cds_connected": connected}
+                )
             except Exception:
                 pass
 
@@ -82,10 +83,14 @@ async def _cds_status_loop(websocket: WebSocket) -> None:
             async with websockets.connect(_cds_url()) as cds_ws:
                 retry_delay = 1.0
                 await _notify(True)
-                await cds_ws.send(json.dumps({
-                    "type": "subscribe",
-                    "fields": {"status:logger_status": {"seconds": -1}},
-                }))
+                await cds_ws.send(
+                    json.dumps(
+                        {
+                            "type": "subscribe",
+                            "fields": {"status:logger_status": {"seconds": -1}},
+                        }
+                    )
+                )
 
                 while True:
                     try:
@@ -114,18 +119,24 @@ async def _cds_status_loop(websocket: WebSocket) -> None:
                             }
                             if statuses:
                                 try:
-                                    await websocket.send_json({
-                                        "type": "logger_status",
-                                        "data": statuses,
-                                    })
+                                    await websocket.send_json(
+                                        {
+                                            "type": "logger_status",
+                                            "data": statuses,
+                                        }
+                                    )
                                 except Exception:
                                     return  # Client disconnected
                         await cds_ws.send(_READY)
 
         except Exception as e:
             await _notify(False)
-            logger.debug("CDS status loop: %s: %s, retrying in %.1fs",
-                         type(e).__name__, e, retry_delay)
+            logger.debug(
+                "CDS status loop: %s: %s, retrying in %.1fs",
+                type(e).__name__,
+                e,
+                retry_delay,
+            )
             await asyncio.sleep(retry_delay)
             retry_delay = min(retry_delay * 2, 30.0)
 
@@ -235,12 +246,14 @@ async def _cds_log_loop(websocket: WebSocket) -> None:
                         entries = []
 
                         for field_name, pairs in data.items():
-                            if not field_name.startswith("stderr:") or not isinstance(pairs, list):
+                            if not field_name.startswith("stderr:") or not isinstance(
+                                pairs, list
+                            ):
                                 continue
                             if field_name == "stderr:logger_manager":
                                 source = "logger_manager"
                             elif field_name.startswith("stderr:logger:"):
-                                source = field_name[len("stderr:logger:"):]
+                                source = field_name[len("stderr:logger:") :]
                             else:
                                 continue
 
@@ -254,18 +267,24 @@ async def _cds_log_loop(websocket: WebSocket) -> None:
                         if entries:
                             entries.sort(key=lambda e: e["timestamp"])
                             try:
-                                await websocket.send_json({
-                                    "type": "log_entries",
-                                    "data": entries,
-                                })
+                                await websocket.send_json(
+                                    {
+                                        "type": "log_entries",
+                                        "data": entries,
+                                    }
+                                )
                             except Exception:
                                 return  # Client disconnected
 
                         await cds_ws.send(_READY)
 
         except Exception as e:
-            logger.debug("CDS log loop: %s: %s, retrying in %.1fs",
-                         type(e).__name__, e, retry_delay)
+            logger.debug(
+                "CDS log loop: %s: %s, retrying in %.1fs",
+                type(e).__name__,
+                e,
+                retry_delay,
+            )
             await asyncio.sleep(retry_delay)
             retry_delay = min(retry_delay * 2, 30.0)
 
