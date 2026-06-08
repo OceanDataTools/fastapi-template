@@ -112,6 +112,33 @@ class TestPreviewConfiguration:
         )
         assert resp.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_preview_resolves_symlinked_file(
+        self, client, auth_headers, tmp_path, monkeypatch
+    ):
+        """A config file reachable via a symlinked local/ should not return 400."""
+        import app.api.configuration as config_mod
+
+        fake_root = tmp_path / "openrvdas"
+        fake_root.mkdir()
+
+        external = tmp_path / "vessel_configs"
+        external.mkdir()
+        (external / "NBP_cruise.yaml").write_text("cruise:\n  id: NBP\n")
+
+        (fake_root / "local").symlink_to(external)
+
+        monkeypatch.setattr(config_mod, "_OPENRVDAS_DIR", fake_root)
+
+        resp = await client.post(
+            "/api/v1/configuration/preview",
+            params={"config_filepath": "local/NBP_cruise.yaml"},
+            headers=auth_headers,
+        )
+        # 503 means OpenRVDAS libs aren't available in the test env — that's fine;
+        # it means _resolve_config_path succeeded and the symlink was followed.
+        assert resp.status_code != 400, f"Symlinked path was rejected: {resp.text}"
+
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/configuration/files
