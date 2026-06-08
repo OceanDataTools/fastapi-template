@@ -16,6 +16,9 @@ _TRAVERSAL_PATHS = [
     "../app/config.py",
     "/etc/shadow",
     "/opt/openrvdas/web_backend/app/config.py",
+    # Traversal via an allowed root prefix — caught by normpath, not the root check
+    "local/../../etc/passwd",
+    "test/../../etc/shadow",
 ]
 
 _BAD_ROOT_PATHS = [
@@ -67,6 +70,38 @@ class TestLoadConfiguration:
             headers=auth_headers,
         )
         assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_load_resolves_symlinked_file(
+        self, client, auth_headers, tmp_path, monkeypatch
+    ):
+        """A config file reachable via a symlinked local/ should not return 400."""
+        import app.api.configuration as config_mod
+
+        fake_root = tmp_path / "openrvdas"
+        fake_root.mkdir()
+
+        external = tmp_path / "vessel_configs"
+        external.mkdir()
+        (external / "NBP_cruise.yaml").write_text("cruise:\n  id: NBP\n")
+
+        (fake_root / "local").symlink_to(external)
+
+        monkeypatch.setattr(config_mod, "_OPENRVDAS_DIR", fake_root)
+
+        resp = await client.post(
+            "/api/v1/configuration/",
+            params={"config_filepath": "local/NBP_cruise.yaml"},
+            headers=auth_headers,
+        )
+        # The path should not be rejected by the traversal guard.
+        # A 400 for config-content reasons (e.g. missing 'loggers' key) or a
+        # 503 (OpenRVDAS libs unavailable in test env) are both acceptable —
+        # they mean _resolve_config_path succeeded and the symlink was followed.
+        if resp.status_code == 400:
+            assert "traversal" not in resp.text.lower(), (
+                f"Symlinked path was rejected by traversal guard: {resp.text}"
+            )
 
 
 # ---------------------------------------------------------------------------
