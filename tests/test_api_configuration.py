@@ -151,3 +151,39 @@ class TestListConfigFiles:
             headers=auth_headers,
         )
         assert resp.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_files_traverses_symlinked_directory(
+        self, client, auth_headers, tmp_path, monkeypatch
+    ):
+        """local/ pointing outside _OPENRVDAS_DIR via a symlink should be traversable."""
+        import app.api.configuration as config_mod
+
+        # Minimal fake openrvdas root.
+        fake_root = tmp_path / "openrvdas"
+        fake_root.mkdir()
+
+        # Config files live outside fake_root (simulates a vessel-specific repo).
+        external = tmp_path / "vessel_configs"
+        external.mkdir()
+        (external / "NBP_cruise.yaml").write_text("mode: port\n")
+        (external / "subdir").mkdir()
+
+        # local/ → external (symlink pointing outside _OPENRVDAS_DIR)
+        (fake_root / "local").symlink_to(external)
+
+        monkeypatch.setattr(config_mod, "_OPENRVDAS_DIR", fake_root)
+
+        resp = await client.get(
+            "/api/v1/configuration/files",
+            params={"path": "local"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        names = [e["name"] for e in body["entries"]]
+        assert "NBP_cruise.yaml" in names
+        assert "subdir" in names
+        # rel_path must remain within the logical tree, not leak the real path.
+        for entry in body["entries"]:
+            assert entry["rel_path"].startswith("local")
