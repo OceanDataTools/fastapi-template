@@ -161,11 +161,12 @@ def _resolve_config_path(config_filepath: str) -> Path:
             status_code=400,
             detail=f"Path must start with one of: {', '.join(sorted(_ALLOWED_ROOTS))}",
         )
-    target = (openrvdas / p).resolve()
+    normalized = Path(normpath(openrvdas / p))
     try:
-        target.relative_to(openrvdas)
+        normalized.relative_to(openrvdas)
     except ValueError:
         raise HTTPException(status_code=400, detail="Path traversal not allowed")
+    target = normalized.resolve()
     if not target.exists():
         raise HTTPException(status_code=404, detail="Config file not found")
     return target
