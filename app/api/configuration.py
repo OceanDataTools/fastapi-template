@@ -1,6 +1,6 @@
 import logging
 import sys
-from os.path import dirname, realpath
+from os.path import dirname, normpath, realpath
 from pathlib import Path
 from typing import Any
 
@@ -72,13 +72,18 @@ async def list_config_files(path: str = Query(default="")) -> dict[str, Any]:
             detail=f"Path must start with one of: {', '.join(sorted(_ALLOWED_ROOTS))}",
         )
 
-    target = (openrvdas / path).resolve()
-
-    # Prevent path traversal
+    # Collapse any '..' components without following symlinks, then verify
+    # the result is still within the openrvdas root.  This blocks traversal
+    # attacks like local/../../etc/passwd while still allowing local/ itself
+    # to be a symlink pointing outside _OPENRVDAS_DIR.
+    normalized = Path(normpath(openrvdas / path))
     try:
-        target.relative_to(openrvdas)
+        normalized.relative_to(openrvdas)
     except ValueError:
         raise HTTPException(status_code=400, detail="Path traversal not allowed")
+
+    # Resolve now to follow symlinks for filesystem operations.
+    target = normalized.resolve()
 
     if not target.exists():
         raise HTTPException(status_code=404, detail="Path not found")
@@ -93,12 +98,15 @@ async def list_config_files(path: str = Query(default="")) -> dict[str, Any]:
         elif item.is_file() and item.suffix in _CONFIG_SUFFIXES:
             files.append(item)
 
+    # Use the logical (pre-resolve) path for rel_path so it stays within the
+    # allowed root even when the physical path resolves outside _OPENRVDAS_DIR.
+    logical_dir = normalized.relative_to(openrvdas)
     for item in sorted(dirs, key=lambda p: p.name):
         entries.append(
             {
                 "name": item.name,
                 "type": "dir",
-                "rel_path": str(item.relative_to(openrvdas)),
+                "rel_path": str(logical_dir / item.name),
                 "abs_path": None,
             }
         )
@@ -107,7 +115,7 @@ async def list_config_files(path: str = Query(default="")) -> dict[str, Any]:
             {
                 "name": item.name,
                 "type": "file",
-                "rel_path": str(item.relative_to(openrvdas)),
+                "rel_path": str(logical_dir / item.name),
                 "abs_path": str(item),
             }
         )
