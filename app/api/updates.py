@@ -83,7 +83,7 @@ async def _cds_status_loop(websocket: WebSocket) -> None:
 
     while True:
         try:
-            async with websockets.connect(_cds_url()) as cds_ws:
+            async with websockets.connect(_cds_url(), max_size=None) as cds_ws:
                 retry_delay = 1.0
                 await _notify(True)
                 await cds_ws.send(
@@ -226,7 +226,7 @@ async def _cds_log_loop(websocket: WebSocket) -> None:
                 "stderr:logger:*": history,
             }
 
-            async with websockets.connect(_cds_url()) as cds_ws:
+            async with websockets.connect(_cds_url(), max_size=None) as cds_ws:
                 retry_delay = 1.0
                 first_connect = False
                 await cds_ws.send(json.dumps({"type": "subscribe", "fields": fields}))
