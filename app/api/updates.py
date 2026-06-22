@@ -35,19 +35,22 @@ async def _db_poll_loop(websocket: WebSocket) -> None:
     last_ts = None
 
     while True:
-        async with AsyncSessionLocal() as session:
-            result = await session.execute(
-                select(LastUpdate).order_by(LastUpdate.timestamp.desc()).limit(1)
-            )
-            latest = result.scalar_one_or_none()
-            ts = latest.timestamp if latest else None
+        try:
+            async with AsyncSessionLocal() as session:
+                result = await session.execute(
+                    select(LastUpdate).order_by(LastUpdate.timestamp.desc()).limit(1)
+                )
+                latest = result.scalar_one_or_none()
+                ts = latest.timestamp if latest else None
 
-        if last_ts is None:
-            last_ts = ts
-            await websocket.send_json({"type": "update"})
-        elif ts != last_ts:
-            last_ts = ts
-            await websocket.send_json({"type": "update"})
+            if last_ts is None:
+                last_ts = ts
+                await websocket.send_json({"type": "update"})
+            elif ts != last_ts:
+                last_ts = ts
+                await websocket.send_json({"type": "update"})
+        except Exception:
+            pass
 
         await asyncio.sleep(0.5)
 
