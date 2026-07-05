@@ -42,15 +42,17 @@ async def _db_poll_loop(websocket: WebSocket) -> None:
                 )
                 latest = result.scalar_one_or_none()
                 ts = latest.timestamp if latest else None
+        except Exception as e:
+            logger.debug("DB poll loop: %s: %s", type(e).__name__, e)
+            await asyncio.sleep(0.5)
+            continue
 
-            if last_ts is None:
-                last_ts = ts
+        if last_ts is None or ts != last_ts:
+            last_ts = ts
+            try:
                 await websocket.send_json({"type": "update"})
-            elif ts != last_ts:
-                last_ts = ts
-                await websocket.send_json({"type": "update"})
-        except Exception:
-            pass
+            except Exception:
+                return  # Client disconnected
 
         await asyncio.sleep(0.5)
 
