@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import apikey_or_jwt_required
+from app.config import settings
 from app.db import config_crud as crud_configs, logger_crud as crud_loggers
 from app.deps import get_async_server_api, get_async_session
 from async_fastapi_server_api import AsyncFastAPIServerAPI
@@ -156,6 +157,17 @@ async def _stream_udp(host: str, port: int, duration: int) -> AsyncGenerator[str
         yield _sse({"type": "message", "data": item})
 
 
+def _default_cds_url() -> str:
+    """Host:port of the configured CachedDataServer.
+
+    Resolved per call rather than baked into a function signature default, so
+    that it follows CACHED_DATA_SERVER_HOST/PORT instead of pinning whatever
+    the settings happened to be at import time. Returned without a scheme;
+    callers prepend ws:// if one isn't already present.
+    """
+    return f"{settings.cached_data_server_host}:{settings.cached_data_server_port}"
+
+
 async def _stream_cds(key: str, url: str, duration: int) -> AsyncGenerator[str, None]:
     import websockets
 
@@ -198,10 +210,11 @@ async def list_serial_ports() -> dict[str, Any]:
     "/cds-fields",
     dependencies=[Depends(apikey_or_jwt_required())],
 )
-async def list_cds_fields(cds_url: str = "localhost:8766") -> dict[str, Any]:
+async def list_cds_fields(cds_url: str | None = None) -> dict[str, Any]:
     """Connect to a CachedDataServer and return its list of available field names."""
     import websockets
 
+    cds_url = cds_url or _default_cds_url()
     ws_url = cds_url if cds_url.startswith("ws://") or cds_url.startswith("wss://") else f"ws://{cds_url}"
     try:
         async with websockets.connect(ws_url, open_timeout=5) as ws:
@@ -278,7 +291,7 @@ async def stream_connection(
     host: str = "",
     udp_port: int | None = None,
     cds_key: str | None = None,
-    cds_url: str = "localhost:8766",
+    cds_url: str | None = None,
     logger_to_pause: str | None = None,
     off_config_id: str | None = None,
     restore_config_id: str | None = None,
@@ -314,7 +327,7 @@ async def stream_connection(
                 if not cds_key:
                     yield _sse({"type": "error", "message": "cds_key is required"})
                     return
-                async for event in _stream_cds(cds_key, cds_url, duration):
+                async for event in _stream_cds(cds_key, cds_url or _default_cds_url(), duration):
                     yield event
 
             else:
