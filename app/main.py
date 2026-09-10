@@ -1,3 +1,4 @@
+import importlib.metadata
 import tomllib
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,13 +19,20 @@ with open(pyproject_path, "rb") as f:
 
 project_name = pyproject["tool"]["poetry"]["name"]
 
-# The displayed version tracks the parent OpenRVDAS project's release
-# version, not this submodule's own (poetry) version.
-openrvdas_pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
-with open(openrvdas_pyproject_path, "rb") as f:
-    openrvdas_pyproject = tomllib.load(f)
 
-project_version = openrvdas_pyproject["project"]["version"]
+# The displayed version tracks the parent OpenRVDAS project's release, not
+# this submodule's own (poetry) version. OpenRVDAS's version is derived from
+# git tags via setuptools_scm and only known once it's installed as a
+# package (see utils/install_openrvdas.sh, which installs it into this
+# venv with --no-deps for exactly this purpose).
+def get_openrvdas_version() -> str:
+    try:
+        return importlib.metadata.version("openrvdas")
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown"
+
+
+project_version = get_openrvdas_version()
 
 
 @asynccontextmanager
