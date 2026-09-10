@@ -17,7 +17,14 @@ with open(pyproject_path, "rb") as f:
     pyproject = tomllib.load(f)
 
 project_name = pyproject["tool"]["poetry"]["name"]
-project_version = pyproject["tool"]["poetry"]["version"]
+
+# The displayed version tracks the parent OpenRVDAS project's release
+# version, not this submodule's own (poetry) version.
+openrvdas_pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+with open(openrvdas_pyproject_path, "rb") as f:
+    openrvdas_pyproject = tomllib.load(f)
+
+project_version = openrvdas_pyproject["project"]["version"]
 
 
 @asynccontextmanager
@@ -42,6 +49,11 @@ app.add_middleware(
 )
 
 app.include_router(apikeys.router)
+
+
+@app.get("/api/v1/version", tags=["Version"])
+async def get_version():
+    return {"version": project_version}
 
 
 @app.get("/api/v1/apikeys/routes", tags=["API Keys"])
