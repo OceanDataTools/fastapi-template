@@ -168,3 +168,25 @@ DEFAULT_ADMIN_PASSWORD=admin
 ```
 
 API docs available at `http://localhost:8000/docs` when running.
+
+## Branching & PR Workflow
+
+This repo is a shared boilerplate/template (`main`) that individual UI projects (e.g. `openrvdas`, this branch) branch off of. There are two parallel tracks, mirrored in both `frontend` and `backend`:
+
+```
+main                              — shared template baseline
+ └─ dev                           — base-improvement integration branch
+     └─ issue_<n>                 — base-improvement work → PR → dev
+
+main
+ └─ <project> (e.g. openrvdas)    — a project's long-lived branch off main
+     └─ <project>_dev (e.g. openrvdas_dev)  — project's integration branch
+         └─ issue_<n>              — project-specific work → PR → <project>_dev
+```
+
+- **Base/template improvements** (generic, reusable): cut an `issue_<number>` branch from `dev`, PR into `dev`.
+- **Project-specific work** (e.g. OpenRVDAS features): cut an `issue_<number>` branch from `openrvdas_dev`, PR into `openrvdas_dev`.
+- `openrvdas_dev` merges into `openrvdas` via PR the same way `dev` merges into `main`.
+- Never push issue work directly to `dev`, `openrvdas_dev`, `main`, or `openrvdas`.
+- All PRs are merged through the GitHub UI (not `git merge`/`gh pr merge` from the CLI).
+- When `main` gets a new release, open issues to rebase `openrvdas` and `openrvdas_dev` against the updated `main`, so this project stays current with base improvements.
