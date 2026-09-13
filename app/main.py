@@ -1,13 +1,29 @@
 import importlib.metadata
+import sys
 import tomllib
 from contextlib import asynccontextmanager
+from os.path import dirname, realpath
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
 
-from app.api import apikeys, auth, configuration, configs, connection, cruise, data_server, examples, loggers, modes, profile, test_connection, updates, users
+from app.api import (
+    apikeys,
+    auth,
+    configs,
+    configuration,
+    connection,
+    cruise,
+    data_server,
+    loggers,
+    modes,
+    profile,
+    test_connection,
+    updates,
+    users,
+)
 from app.config import settings
 from app.deps import get_current_user
 from async_fastapi_server_api import AsyncFastAPIServerAPI
@@ -19,17 +35,28 @@ with open(pyproject_path, "rb") as f:
 
 project_name = pyproject["tool"]["poetry"]["name"]
 
-
 # The displayed version tracks the parent OpenRVDAS project's release, not
-# this submodule's own (poetry) version. OpenRVDAS's version is derived from
-# git tags via setuptools_scm and only known once it's installed as a
-# package (see utils/install_openrvdas.sh, which installs it into this
-# venv with --no-deps for exactly this purpose).
-def get_openrvdas_version() -> str:
-    try:
-        return importlib.metadata.version("openrvdas")
-    except importlib.metadata.PackageNotFoundError:
-        return "unknown"
+# this submodule's own (poetry) version. 3 levels up from this file
+# (app/main.py -> app -> web_backend -> OpenRVDAS root) is where an
+# OpenRVDAS installation's own `logger` package lives.
+sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
+
+try:
+    # Available only when running inside an OpenRVDAS installation. Reads
+    # the version live from the current git tree where possible, rather
+    # than trusting only what was frozen into this venv's dist-info
+    # metadata at install time - see that function's docstring in the
+    # parent OpenRVDAS repo (logger/utils/read_version.py).
+    from logger.utils.read_version import (  # noqa: E402
+        get_version as get_openrvdas_version,
+    )
+except ImportError:
+
+    def get_openrvdas_version() -> str:
+        try:
+            return importlib.metadata.version("openrvdas")
+        except importlib.metadata.PackageNotFoundError:
+            return "unknown"
 
 
 project_version = get_openrvdas_version()
