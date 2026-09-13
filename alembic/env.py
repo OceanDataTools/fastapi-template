@@ -14,7 +14,6 @@ from alembic import context
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from app.models import Base  # declarative base
 import app.models
-import app.models_openrvdas
 # Add additional model files here but remember to inherit from the app.models Base class
 
 
