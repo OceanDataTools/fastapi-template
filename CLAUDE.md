@@ -159,6 +159,7 @@ Issue branches are named `issue_NNN`, where `NNN` is the GitHub issue number zer
 - `<project>_dev` merges into `<project>` via PR the same way `dev` merges into `main`.
 - Never push issue work directly to `dev`, `<project>_dev`, `main`, or `<project>`.
 - All PRs are merged through the GitHub UI (not `git merge`/`gh pr merge` from the CLI).
+- Close the linked issue as soon as its PR merges into `dev`/`<project>_dev` — don't wait for the change to reach `main`. GitHub's own `Closes #N` auto-close only fires once the commit lands on the default branch (`main`), and even then isn't fully reliable, so close manually at dev-merge time by default. Exception: leave it open if the issue or PR explicitly says not to close it yet (e.g. it tracks more than just that one PR).
 - When `main` gets a new release, open issues to rebase each `<project>` branch and its `<project>_dev` branch against the updated `main`, so projects stay current with base improvements.
 
 See `RELEASING.md` for the step-by-step procedure to cut a release of `main`.
