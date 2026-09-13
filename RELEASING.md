@@ -35,7 +35,7 @@ This repo follows [SemVer](https://semver.org/) (`MAJOR.MINOR.PATCH`):
    gh release create vX.Y.Z --generate-notes
    ```
 
-7. Once the release is published, open a tracking issue (or one per project) to rebase each `<project>` branch (e.g. `openrvdas`) and its `<project>_dev` branch (e.g. `openrvdas_dev`) against the newly released `main`, per the branching workflow in `CLAUDE.md`.
+7. Once the release is published, open a tracking issue (or one per project) to rebase each `<project>` branch (e.g. `openrvdas`) and its `<project>_dev` branch (e.g. `openrvdas_dev`) against the newly released `main`, per the branching workflow in `CLAUDE.md`. If a rebase-tracking issue from a *previous* release is still open when this happens, close it as superseded (a rebase onto the older release is moot once a newer one exists) and reference the new tracking issue in its place — don't leave both open.
 
 ## Notes
 
