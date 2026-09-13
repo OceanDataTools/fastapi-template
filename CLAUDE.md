@@ -171,7 +171,7 @@ API docs available at `http://localhost:8000/docs` when running.
 
 ## Branching & PR Workflow
 
-This repo is a shared boilerplate/template (`main`) that individual UI projects (e.g. `openrvdas`) branch off of. There are two parallel tracks, mirrored in both `frontend` and `backend`:
+This repo is a shared boilerplate/template (`main`) that individual UI projects (e.g. `openrvdas`, this branch) branch off of. There are two parallel tracks, mirrored in both `frontend` and `backend`:
 
 ```
 main                              — shared template baseline
