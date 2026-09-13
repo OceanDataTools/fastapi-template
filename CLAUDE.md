@@ -160,3 +160,5 @@ Issue branches are named `issue_NNN`, where `NNN` is the GitHub issue number zer
 - Never push issue work directly to `dev`, `<project>_dev`, `main`, or `<project>`.
 - All PRs are merged through the GitHub UI (not `git merge`/`gh pr merge` from the CLI).
 - When `main` gets a new release, open issues to rebase each `<project>` branch and its `<project>_dev` branch against the updated `main`, so projects stay current with base improvements.
+
+See `RELEASING.md` for the step-by-step procedure to cut a release of `main`.
