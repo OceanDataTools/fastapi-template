@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "odt-fastapi-backend"
-version = "1.0.0"
+version = "1.0.1"
 description = "ODT backend server built with TimescaleDB (or SQLite) and FastAPI"
 authors = ["Webb Pinner <webbpinner@gmail.com>"]
 license = "MIT"
