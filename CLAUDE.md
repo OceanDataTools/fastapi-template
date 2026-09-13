@@ -144,16 +144,18 @@ This repo is a shared boilerplate/template (`main`) that individual UI projects 
 ```
 main                              — shared template baseline
  └─ dev                           — base-improvement integration branch
-     └─ issue_<n>                 — base-improvement work → PR → dev
+     └─ issue_NNN                 — base-improvement work → PR → dev
 
 main
  └─ <project> (e.g. openrvdas)    — a project's long-lived branch off main
      └─ <project>_dev (e.g. openrvdas_dev)  — project's integration branch
-         └─ issue_<n>              — project-specific work → PR → <project>_dev
+         └─ issue_NNN              — project-specific work → PR → <project>_dev
 ```
 
-- **Base/template improvements** (generic, reusable): cut an `issue_<number>` branch from `dev`, PR into `dev`.
-- **Project-specific work** (e.g. OpenRVDAS features): cut an `issue_<number>` branch from `<project>_dev` (e.g. `openrvdas_dev`), PR into `<project>_dev`.
+Issue branches are named `issue_NNN`, where `NNN` is the GitHub issue number zero-padded to 3 digits (e.g. issue #7 → `issue_007`, issue #42 → `issue_042`, issue #123 → `issue_123`).
+
+- **Base/template improvements** (generic, reusable): cut an `issue_NNN` branch from `dev`, PR into `dev`.
+- **Project-specific work** (e.g. OpenRVDAS features): cut an `issue_NNN` branch from `<project>_dev` (e.g. `openrvdas_dev`), PR into `<project>_dev`.
 - `<project>_dev` merges into `<project>` via PR the same way `dev` merges into `main`.
 - Never push issue work directly to `dev`, `<project>_dev`, `main`, or `<project>`.
 - All PRs are merged through the GitHub UI (not `git merge`/`gh pr merge` from the CLI).
