@@ -26,15 +26,15 @@ repos:
           "--ignore=E501",          # ignore "line too long"
         ]
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.1
-    hooks:
-      - id: mypy
-        files: ^app/.*\.py$
-        additional_dependencies: [types-PyYAML]
-
   - repo: local
     hooks:
+      - id: mypy
+        name: mypy
+        entry: poetry run mypy app/
+        language: system
+        files: ^app/.*\.py$
+        pass_filenames: false
+
       - id: pytest
         name: pytest
         entry: poetry run pytest tests/ -q --tb=short
