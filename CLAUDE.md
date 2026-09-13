@@ -139,7 +139,22 @@ API docs available at `http://localhost:8000/docs` when running.
 
 ## Branching & PR Workflow
 
-- `dev` is the integration branch (cut from `main`). All issue work targets `dev`, not `main` or `openrvdas` directly.
-- Every code change happens on an `issue_<number>` branch cut from `dev`, tied to an open GitHub issue (e.g. `issue_42`).
-- Open a PR from the issue branch into `dev` — never push directly to `dev`.
+This repo is a shared boilerplate/template (`main`) that individual UI projects (e.g. `openrvdas`) branch off of. There are two parallel tracks, mirrored in both `frontend` and `backend`:
+
+```
+main                              — shared template baseline
+ └─ dev                           — base-improvement integration branch
+     └─ issue_<n>                 — base-improvement work → PR → dev
+
+main
+ └─ <project> (e.g. openrvdas)    — a project's long-lived branch off main
+     └─ <project>_dev (e.g. openrvdas_dev)  — project's integration branch
+         └─ issue_<n>              — project-specific work → PR → <project>_dev
+```
+
+- **Base/template improvements** (generic, reusable): cut an `issue_<number>` branch from `dev`, PR into `dev`.
+- **Project-specific work** (e.g. OpenRVDAS features): cut an `issue_<number>` branch from `<project>_dev` (e.g. `openrvdas_dev`), PR into `<project>_dev`.
+- `<project>_dev` merges into `<project>` via PR the same way `dev` merges into `main`.
+- Never push issue work directly to `dev`, `<project>_dev`, `main`, or `<project>`.
 - All PRs are merged through the GitHub UI (not `git merge`/`gh pr merge` from the CLI).
+- When `main` gets a new release, open issues to rebase each `<project>` branch and its `<project>_dev` branch against the updated `main`, so projects stay current with base improvements.
