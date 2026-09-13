@@ -16,6 +16,16 @@ async def test_get_version_endpoint_returns_project_version(client):
     assert response.json() == {"version": app.main.project_version}
 
 
+# get_openrvdas_version is bound at import time to OpenRVDAS's own
+# logger.utils.read_version.get_version when OpenRVDAS is importable here
+# (as it is whenever this venv sits inside an OpenRVDAS checkout), or to
+# the local importlib.metadata-based fallback otherwise. setuptools_scm
+# isn't one of this project's own dependencies, so it's expected to be
+# absent from this venv - read_version.get_version() catches that and
+# falls through to importlib.metadata itself, which is what these tests
+# exercise.
+
+
 def test_get_openrvdas_version_reads_installed_package_metadata():
     with patch("importlib.metadata.version", return_value="2.6.1") as mock_version:
         assert get_openrvdas_version() == "2.6.1"
@@ -23,5 +33,8 @@ def test_get_openrvdas_version_reads_installed_package_metadata():
 
 
 def test_get_openrvdas_version_falls_back_to_unknown():
-    with patch("importlib.metadata.version", side_effect=importlib.metadata.PackageNotFoundError):
+    with patch(
+        "importlib.metadata.version",
+        side_effect=importlib.metadata.PackageNotFoundError,
+    ):
         assert get_openrvdas_version() == "unknown"
