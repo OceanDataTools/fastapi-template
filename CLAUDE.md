@@ -136,3 +136,10 @@ DEFAULT_ADMIN_PASSWORD=admin
 ```
 
 API docs available at `http://localhost:8000/docs` when running.
+
+## Branching & PR Workflow
+
+- `dev` is the integration branch (cut from `main`). All issue work targets `dev`, not `main` or `openrvdas` directly.
+- Every code change happens on an `issue_<number>` branch cut from `dev`, tied to an open GitHub issue (e.g. `issue_42`).
+- Open a PR from the issue branch into `dev` — never push directly to `dev`.
+- All PRs are merged through the GitHub UI (not `git merge`/`gh pr merge` from the CLI).
