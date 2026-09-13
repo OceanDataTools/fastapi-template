@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev, openrvdas, openrvdas_dev]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: "1.8.3"
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: poetry-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            poetry-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: black --check
+        run: poetry run black --check app/
+
+      - name: isort --check
+        run: poetry run isort --check-only app/
+
+      - name: flake8
+        run: poetry run flake8 app/ --ignore=E501
+
+      - name: mypy
+        # TODO(#9): pre-existing type errors need fixing before this can be blocking.
+        continue-on-error: true
+        run: poetry run mypy app/
+
+      - name: pytest
+        run: poetry run pytest tests/ -q --tb=short
