@@ -1,12 +1,12 @@
-from typing import Optional, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, Optional
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models_openrvdas import Cruise
 from app.db.base import CachedAsyncCRUDBase, CacheKey
+from app.models_openrvdas import Cruise
 
 
 class CruiseCRUD(CachedAsyncCRUDBase):
@@ -52,7 +52,9 @@ class CruiseCRUD(CachedAsyncCRUDBase):
         config_filename: Optional[str] = None,
     ) -> Dict[str, Any]:
         if start is not None and end is not None and start > end:
-            raise ValueError(f"Cruise start time ({start}) cannot be after end time ({end})")
+            raise ValueError(
+                f"Cruise start time ({start}) cannot be after end time ({end})"
+            )
 
         result = await session.execute(select(Cruise))
         cruise: Optional[Cruise] = result.scalar_one_or_none()

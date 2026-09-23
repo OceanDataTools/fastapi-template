@@ -1,13 +1,25 @@
 from __future__ import annotations
+
 from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Table, Text, func, Index
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Table,
+    Text,
+    func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.models import Base
-from sqlalchemy import text
 
 # -------------------
 # Association table: Config <-> Mode
@@ -15,9 +27,20 @@ from sqlalchemy import text
 logger_config_modes = Table(
     "logger_config_modes",
     Base.metadata,
-    Column("config_id", String(255), ForeignKey("configs.id", ondelete="CASCADE"), primary_key=True),
-    Column("mode_id", String(255), ForeignKey("modes.id", ondelete="CASCADE"), primary_key=True),
+    Column(
+        "config_id",
+        String(255),
+        ForeignKey("configs.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "mode_id",
+        String(255),
+        ForeignKey("modes.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
 )
+
 
 # -------------------
 # Cruise (metadata only)
@@ -26,8 +49,12 @@ class Cruise(Base):
     __tablename__ = "cruise"
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    start: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    end: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     config_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     config_mtime_baseline: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     loaded_time: Mapped[datetime] = mapped_column(
@@ -36,6 +63,7 @@ class Cruise(Base):
 
     def __repr__(self):
         return f"<Cruise id={self.id}>"
+
 
 # -------------------
 # Logger
@@ -52,6 +80,7 @@ class Logger(Base):
 
     def __repr__(self):
         return f"<Logger id={self.id}>"
+
 
 # -------------------
 # Config
@@ -81,7 +110,10 @@ class Config(Base):
     config_json: Mapped[str] = mapped_column(Text, nullable=False)
 
     def __repr__(self):
-        return f"<Config id={self.id} config_json={self.config_json} active={self.active}>"
+        return (
+            f"<Config id={self.id} config_json={self.config_json} active={self.active}>"
+        )
+
 
 # -------------------
 # LoggerConfigState
@@ -107,17 +139,32 @@ class LoggerConfigState(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     logger_id: Mapped[Optional[str]] = mapped_column(
-        String(255), ForeignKey("loggers.id", ondelete="CASCADE"), nullable=True, index=True
+        String(255),
+        ForeignKey("loggers.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
     config_id: Mapped[str] = mapped_column(
-        String(255), ForeignKey("configs.id", ondelete="CASCADE"), nullable=False, index=True
+        String(255),
+        ForeignKey("configs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
-    logger: Mapped[Optional[Logger]] = relationship("Logger", back_populates="config_states")
+    logger: Mapped[Optional[Logger]] = relationship(
+        "Logger", back_populates="config_states"
+    )
     config: Mapped[Config] = relationship("Config", back_populates="states")
 
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    last_checked: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_checked: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
     running: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     failed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     pid: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -125,6 +172,7 @@ class LoggerConfigState(Base):
 
     def __repr__(self):
         return f"<LoggerConfigState logger={self.logger_id} config={self.config_id}>"
+
 
 # -------------------
 # Mode
@@ -143,6 +191,7 @@ class Mode(Base):
     def __repr__(self):
         return f"<Mode id={self.id} active={self.active} default={self.default}>"
 
+
 # -------------------
 # LastUpdate
 # -------------------
@@ -150,10 +199,16 @@ class LastUpdate(Base):
     __tablename__ = "last_update"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
     def __repr__(self):
         return f"<LastUpdate timestamp={self.timestamp}>"
+
 
 # -------------------
 # LogMessage
@@ -164,9 +219,13 @@ class LogMessage(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     source: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, index=True)
     user: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, index=True)
-    log_level: Mapped[Optional[int]] = mapped_column(Integer, default=0, nullable=True, index=True)
+    log_level: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0, nullable=True, index=True
+    )
     message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
 
     def __repr__(self):
         return f"<LogMessage level={self.log_level} source={self.source} time={self.timestamp}>"

@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import apikey_or_jwt_required
 from app.config import settings
-from app.db import config_crud as crud_configs, logger_crud as crud_loggers
+from app.db import config_crud as crud_configs
+from app.db import logger_crud as crud_loggers
 from app.deps import get_async_server_api, get_async_session
 from async_fastapi_server_api import AsyncFastAPIServerAPI
 
@@ -27,6 +28,7 @@ _PORT_RELEASE_WAIT = 3  # seconds to wait after setting a logger to off
 # ---------------------------------------------------------------------------
 # Port-in-config detection
 # ---------------------------------------------------------------------------
+
 
 def _config_uses_serial(obj: Any, port: str) -> bool:
     if isinstance(obj, dict):
@@ -58,7 +60,9 @@ def _config_uses_udp(obj: Any, port: int) -> bool:
     return False
 
 
-def _config_json_uses_port(config_json: str, *, serial_port: str | None, udp_port: int | None) -> bool:
+def _config_json_uses_port(
+    config_json: str, *, serial_port: str | None, udp_port: int | None
+) -> bool:
     try:
         cfg = json.loads(config_json)
     except (json.JSONDecodeError, TypeError):
@@ -74,6 +78,7 @@ def _config_json_uses_port(config_json: str, *, serial_port: str | None, udp_por
 # SSE helpers
 # ---------------------------------------------------------------------------
 
+
 def _sse(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
@@ -82,7 +87,10 @@ def _sse(payload: dict[str, Any]) -> str:
 # Streaming readers
 # ---------------------------------------------------------------------------
 
-async def _stream_serial(port: str, baud_rate: int, duration: int) -> AsyncGenerator[str, None]:
+
+async def _stream_serial(
+    port: str, baud_rate: int, duration: int
+) -> AsyncGenerator[str, None]:
     try:
         import serial
     except ImportError:
@@ -171,7 +179,9 @@ def _default_cds_url() -> str:
 async def _stream_cds(key: str, url: str, duration: int) -> AsyncGenerator[str, None]:
     import websockets
 
-    ws_url = url if url.startswith("ws://") or url.startswith("wss://") else f"ws://{url}"
+    ws_url = (
+        url if url.startswith("ws://") or url.startswith("wss://") else f"ws://{url}"
+    )
     subscription = json.dumps({"type": "subscribe", "fields": {key: {"seconds": 0}}})
     deadline = asyncio.get_running_loop().time() + duration
     count = 0
@@ -179,11 +189,17 @@ async def _stream_cds(key: str, url: str, duration: int) -> AsyncGenerator[str, 
     try:
         async with websockets.connect(ws_url) as ws:
             await ws.send(subscription)
-            while asyncio.get_running_loop().time() < deadline and count < _MAX_MESSAGES:
+            while (
+                asyncio.get_running_loop().time() < deadline and count < _MAX_MESSAGES
+            ):
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
                     data = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
-                    msg = json.dumps(data, indent=2) if isinstance(data, dict) else str(raw)
+                    msg = (
+                        json.dumps(data, indent=2)
+                        if isinstance(data, dict)
+                        else str(raw)
+                    )
                     yield _sse({"type": "message", "data": msg})
                     count += 1
                 except (asyncio.TimeoutError, TimeoutError):
@@ -195,6 +211,7 @@ async def _stream_cds(key: str, url: str, duration: int) -> AsyncGenerator[str, 
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/serial-ports",
@@ -215,7 +232,11 @@ async def list_cds_fields(cds_url: str | None = None) -> dict[str, Any]:
     import websockets
 
     cds_url = cds_url or _default_cds_url()
-    ws_url = cds_url if cds_url.startswith("ws://") or cds_url.startswith("wss://") else f"ws://{cds_url}"
+    ws_url = (
+        cds_url
+        if cds_url.startswith("ws://") or cds_url.startswith("wss://")
+        else f"ws://{cds_url}"
+    )
     try:
         async with websockets.connect(ws_url, open_timeout=5) as ws:
             await ws.send(json.dumps({"type": "fields"}))
@@ -224,7 +245,9 @@ async def list_cds_fields(cds_url: str | None = None) -> dict[str, Any]:
             fields = sorted(data.get("fields", []))
             return {"fields": fields}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Could not reach CDS at {cds_url}: {e}")
+        raise HTTPException(
+            status_code=502, detail=f"Could not reach CDS at {cds_url}: {e}"
+        )
 
 
 @router.get(
@@ -276,7 +299,12 @@ async def check_port(
             "off_config_id": off_config["id"] if off_config else None,
         }
 
-    return {"in_use": False, "logger_id": None, "active_config_id": None, "off_config_id": None}
+    return {
+        "in_use": False,
+        "logger_id": None,
+        "active_config_id": None,
+        "off_config_id": None,
+    }
 
 
 @router.post(
@@ -305,7 +333,9 @@ async def stream_connection(
         paused = False
         try:
             if logger_to_pause and off_config_id:
-                await server_api.set_active_logger_config(logger_to_pause, off_config_id)
+                await server_api.set_active_logger_config(
+                    logger_to_pause, off_config_id
+                )
                 paused = True
                 await asyncio.sleep(_PORT_RELEASE_WAIT)
 
@@ -327,11 +357,18 @@ async def stream_connection(
                 if not cds_key:
                     yield _sse({"type": "error", "message": "cds_key is required"})
                     return
-                async for event in _stream_cds(cds_key, cds_url or _default_cds_url(), duration):
+                async for event in _stream_cds(
+                    cds_key, cds_url or _default_cds_url(), duration
+                ):
                     yield event
 
             else:
-                yield _sse({"type": "error", "message": f"Unknown connection type: {conn_type}"})
+                yield _sse(
+                    {
+                        "type": "error",
+                        "message": f"Unknown connection type: {conn_type}",
+                    }
+                )
                 return
 
             yield _sse({"type": "done"})
@@ -341,7 +378,9 @@ async def stream_connection(
         finally:
             if paused and restore_config_id and logger_to_pause:
                 try:
-                    await server_api.set_active_logger_config(logger_to_pause, restore_config_id)
+                    await server_api.set_active_logger_config(
+                        logger_to_pause, restore_config_id
+                    )
                 except Exception:
                     pass
 

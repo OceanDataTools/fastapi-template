@@ -35,7 +35,9 @@ async def websocket_data_server_proxy(
 
     await websocket.accept()
 
-    cds_url = f"ws://{settings.cached_data_server_host}:{settings.cached_data_server_port}"
+    cds_url = (
+        f"ws://{settings.cached_data_server_host}:{settings.cached_data_server_port}"
+    )
 
     try:
         async with websockets.connect(cds_url) as cds_ws:

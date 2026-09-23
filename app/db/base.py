@@ -1,7 +1,7 @@
 import asyncio
 import time
-from typing import Any, Dict, Optional, Tuple, List
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,9 +34,7 @@ class CachedAsyncCRUDBase:
     # ---------- Low-level cache operations ----------
 
     async def _get(
-        self,
-        key: CacheKey,
-        session: Optional[AsyncSession] = None
+        self, key: CacheKey, session: Optional[AsyncSession] = None
     ) -> Optional[Any]:
         """
         Return cached value or None.
@@ -67,19 +65,13 @@ class CachedAsyncCRUDBase:
         # ---- Lock only protects in-memory state ----
         async with self._lock:
             # If DB has a newer timestamp, invalidate cache
-            if db_ts and (
-                self._last_update is None
-                or db_ts > self._last_update
-            ):
+            if db_ts and (self._last_update is None or db_ts > self._last_update):
                 self._cache.clear()
                 self._last_update = db_ts
 
             return self._cache.get(key)
 
-    async def _get_by_prefix(
-        self,
-        prefix: Tuple[Any, ...]
-    ) -> List[Any]:
+    async def _get_by_prefix(self, prefix: Tuple[Any, ...]) -> List[Any]:
         """
         Return all cached values whose keys start with `prefix`.
 
@@ -97,20 +89,18 @@ class CachedAsyncCRUDBase:
             return [
                 value
                 for key, value in self._cache.items()
-                if key[:len(prefix)] == prefix
+                if key[: len(prefix)] == prefix
             ]
 
     async def _get_items_by_prefix(
-        self,
-        prefix: Tuple[Any, ...]
+        self, prefix: Tuple[Any, ...]
     ) -> List[Tuple[CacheKey, Any]]:
         async with self._lock:
             return [
                 (key, value)
                 for key, value in self._cache.items()
-                if key[:len(prefix)] == prefix
+                if key[: len(prefix)] == prefix
             ]
-
 
     async def _set(self, key: CacheKey, value: Any) -> None:
         """
@@ -138,10 +128,7 @@ class CachedAsyncCRUDBase:
         Invalidate all keys that start with the given prefix.
         """
         async with self._lock:
-            to_delete = [
-                k for k in self._cache
-                if k[:len(prefix)] == prefix
-            ]
+            to_delete = [k for k in self._cache if k[: len(prefix)] == prefix]
             for k in to_delete:
                 self._cache.pop(k, None)
 

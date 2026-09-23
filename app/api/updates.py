@@ -258,7 +258,7 @@ async def _cds_log_loop(websocket: WebSocket) -> None:
                             if field_name == "stderr:logger_manager":
                                 source = "logger_manager"
                             elif field_name.startswith("stderr:logger:"):
-                                source = field_name[len("stderr:logger:") :]
+                                source = field_name.removeprefix("stderr:logger:")
                             else:
                                 continue
 
