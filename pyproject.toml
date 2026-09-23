@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "odt-fastapi-backend"
-version = "1.0.1"
+version = "1.0.2"
 description = "ODT backend server built with TimescaleDB (or SQLite) and FastAPI"
 authors = ["Webb Pinner <webbpinner@gmail.com>"]
 license = "MIT"
@@ -38,6 +38,7 @@ mypy = "^1.10"
 types-PyYAML = "^6.0"
 
 [tool.mypy]
+plugins = ["pydantic.mypy"]
 explicit_package_bases = true
 ignore_missing_imports = true
 

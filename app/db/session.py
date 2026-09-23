@@ -1,6 +1,5 @@
 from sqlalchemy import event
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
 
@@ -8,7 +7,7 @@ DATABASE_URL = settings.database_url
 
 engine = create_async_engine(DATABASE_URL, future=True, echo=False)
 
-if DATABASE_URL and DATABASE_URL.startswith("sqlite"):
+if DATABASE_URL.startswith("sqlite"):
 
     @event.listens_for(engine.sync_engine, "connect")
     def _set_sqlite_pragma(dbapi_conn, _record):
@@ -17,4 +16,6 @@ if DATABASE_URL and DATABASE_URL.startswith("sqlite"):
         cursor.close()
 
 
-AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+AsyncSessionLocal = async_sessionmaker(
+    engine, expire_on_commit=False, class_=AsyncSession
+)
