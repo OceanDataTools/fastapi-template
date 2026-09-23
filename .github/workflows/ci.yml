@@ -44,8 +44,6 @@ jobs:
         run: poetry run flake8 app/ --ignore=E501
 
       - name: mypy
-        # TODO(#9): pre-existing type errors need fixing before this can be blocking.
-        continue-on-error: true
         run: poetry run mypy app/
 
       - name: pytest

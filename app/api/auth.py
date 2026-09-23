@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import jwt
 from fastapi import (
@@ -131,8 +132,8 @@ async def refresh_access_token(
 
     try:
         payload = jwt.decode(refresh_token, settings.secret_key, algorithms=["HS256"])
-        username: str = payload.get("sub")
-        token_type: str = payload.get("type")
+        username: Optional[str] = payload.get("sub")
+        token_type: Optional[str] = payload.get("type")
         roles: list[str] = payload.get("roles", [])
 
         if token_type != "refresh" or username is None or not isinstance(roles, list):
