@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import NoResultFound
@@ -58,7 +58,7 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
         errors: Optional[str] = None,
         update_timestamp: bool = True,
         return_serialized: bool = True,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], LoggerConfigState, None]:
         stmt = select(LoggerConfigState).where(
             LoggerConfigState.config_id == config_id,
             LoggerConfigState.logger_id == logger_id,
@@ -74,7 +74,11 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
                 failed=failed if failed is not None else False,
                 pid=pid,
                 errors=errors,
-                timestamp=datetime.now(timezone.utc) if update_timestamp else datetime(1970, 1, 1, tzinfo=timezone.utc),
+                timestamp=(
+                    datetime.now(timezone.utc)
+                    if update_timestamp
+                    else datetime(1970, 1, 1, tzinfo=timezone.utc)
+                ),
             )
             session.add(state)
         else:
@@ -101,7 +105,7 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
 
     async def touch_state(
         self, session: AsyncSession, logger_id: str, return_serialized: bool = True
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], LoggerConfigState, None]:
         state = await session.scalar(
             select(LoggerConfigState)
             .where(LoggerConfigState.logger_id == logger_id)
@@ -248,7 +252,7 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
     # ---------- DELETE ----------
     async def delete_state(
         self, session: AsyncSession, state_id: int, return_serialized: bool = True
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], LoggerConfigState, None]:
         result = await session.execute(
             select(LoggerConfigState).where(LoggerConfigState.id == state_id)
         )
@@ -300,7 +304,7 @@ class LoggerConfigStateCRUD(CachedAsyncCRUDBase):
     # ---------- HELPERS ----------
     @staticmethod
     def reformat_status_by_timestamp_with_names(
-        states: List[Dict[str, Any]]
+        states: List[Dict[str, Any]],
     ) -> Dict[datetime, Dict[str, Dict[str, Any]]]:
         reformatted: Dict[datetime, Dict[str, Dict[str, Any]]] = {}
         for state in states:
