@@ -1,5 +1,5 @@
 import copy
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from sqlalchemy import select
 from sqlalchemy.exc import NoResultFound
@@ -158,7 +158,7 @@ class ModeCRUD(CachedAsyncCRUDBase):
         session: AsyncSession,
         return_serialized: bool = True,  # optional flag
         **data,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], Mode, None]:
         mode = Mode(**data)
         session.add(mode)
         await session.flush()
@@ -181,7 +181,7 @@ class ModeCRUD(CachedAsyncCRUDBase):
         mode_id: str,
         return_serialized: bool = True,  # optional flag
         **data,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], Mode, None]:
         result = await session.execute(
             select(Mode).options(selectinload(Mode.configs)).where(Mode.id == mode_id)
         )
@@ -207,10 +207,10 @@ class ModeCRUD(CachedAsyncCRUDBase):
 
         config_ids = data.get("config_ids")
         if config_ids is not None:
-            result = await session.execute(
+            cfg_result = await session.execute(
                 select(Config).where(Config.id.in_(config_ids))
             )
-            mode.configs = list(result.scalars().all())
+            mode.configs = list(cfg_result.scalars().all())
 
         await session.flush()
 
@@ -233,7 +233,7 @@ class ModeCRUD(CachedAsyncCRUDBase):
         session: AsyncSession,
         mode_id: str,
         return_serialized: bool = True,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], Mode, None]:
         result = await session.execute(
             select(Mode).options(selectinload(Mode.configs)).where(Mode.id == mode_id)
         )
@@ -296,8 +296,8 @@ class ModeCRUD(CachedAsyncCRUDBase):
         if not mode:
             raise NoResultFound(f"Mode {mode_id} not found")
 
-        result = await session.execute(select(Config).where(Config.id == config_id))
-        cfg = result.scalar_one_or_none()
+        cfg_result = await session.execute(select(Config).where(Config.id == config_id))
+        cfg = cfg_result.scalar_one_or_none()
         if not cfg:
             raise NoResultFound(f"Config {config_id} not found")
 
@@ -312,7 +312,7 @@ class ModeCRUD(CachedAsyncCRUDBase):
         session: AsyncSession,
         mode_id: str,
         return_serialized: bool = True,  # optional flag
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], Mode, None]:
 
         # Clear existing active mode
         result = await session.execute(select(Mode).where(Mode.active.is_(True)))
