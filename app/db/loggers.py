@@ -1,14 +1,14 @@
 import copy
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Union
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
 
-from app.models_openrvdas import Logger, Config
 from app.db.base import CachedAsyncCRUDBase, CacheKey
 from app.db.configs import ConfigCRUD
+from app.models_openrvdas import Config, Logger
 
 
 class LoggerCRUD(CachedAsyncCRUDBase):
@@ -64,7 +64,7 @@ class LoggerCRUD(CachedAsyncCRUDBase):
                 )
             )
             orm_loggers = result.scalars().all()
-            loggers = [self._serialize(l) for l in orm_loggers]
+            loggers = [self._serialize(lg) for lg in orm_loggers]
 
             # cache
             await self._set(key, copy.deepcopy(loggers))
@@ -91,7 +91,7 @@ class LoggerCRUD(CachedAsyncCRUDBase):
             logger = copy.deepcopy(cached)
         else:
             all_loggers = await self.list_loggers(session)
-            logger = next((l for l in all_loggers if l["id"] == logger_id), None)
+            logger = next((lg for lg in all_loggers if lg["id"] == logger_id), None)
             if logger is None:
                 raise NoResultFound(f"Logger {logger_id} not found")
 
@@ -107,7 +107,7 @@ class LoggerCRUD(CachedAsyncCRUDBase):
         session: AsyncSession,
         return_serialized: bool = True,
         **data,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], Logger, None]:
         logger = Logger(**data)
         session.add(logger)
         await session.flush()
@@ -135,13 +135,10 @@ class LoggerCRUD(CachedAsyncCRUDBase):
         logger_id: str,
         return_serialized: bool = True,
         **data,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], Logger, None]:
         result = await session.execute(
             select(Logger)
-            .options(
-                selectinload(Logger.configs),
-                selectinload(Logger.config_states)
-            )
+            .options(selectinload(Logger.configs), selectinload(Logger.config_states))
             .where(Logger.id == logger_id)
         )
         logger = result.scalar_one_or_none()
@@ -157,10 +154,7 @@ class LoggerCRUD(CachedAsyncCRUDBase):
         # reload to ensure relationships are populated if ORM needed
         result = await session.execute(
             select(Logger)
-            .options(
-                selectinload(Logger.configs),
-                selectinload(Logger.config_states)
-            )
+            .options(selectinload(Logger.configs), selectinload(Logger.config_states))
             .where(Logger.id == logger_id)
         )
         logger = result.scalar_one()
@@ -176,13 +170,10 @@ class LoggerCRUD(CachedAsyncCRUDBase):
         session: AsyncSession,
         logger_id: str,
         return_serialized: bool = True,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], Logger, None]:
         result = await session.execute(
             select(Logger)
-            .options(
-                selectinload(Logger.configs),
-                selectinload(Logger.config_states)
-            )
+            .options(selectinload(Logger.configs), selectinload(Logger.config_states))
             .where(Logger.id == logger_id)
         )
         logger = result.scalar_one_or_none()
@@ -215,8 +206,8 @@ class LoggerCRUD(CachedAsyncCRUDBase):
         if not logger:
             raise NoResultFound(f"Logger {logger_id} not found")
 
-        result = await session.execute(select(Config).where(Config.id == config_id))
-        cfg = result.scalar_one_or_none()
+        cfg_result = await session.execute(select(Config).where(Config.id == config_id))
+        cfg = cfg_result.scalar_one_or_none()
         if not cfg:
             raise NoResultFound(f"Config {config_id} not found")
 
@@ -239,7 +230,7 @@ class LoggerCRUD(CachedAsyncCRUDBase):
             return []
 
         # Gather all unique config IDs
-        config_ids = {c["id"] for l in loggers for c in l.get("configs", [])}
+        config_ids = {c["id"] for lg in loggers for c in lg.get("configs", [])}
 
         config_map = {}
         if config_ids:
@@ -247,25 +238,25 @@ class LoggerCRUD(CachedAsyncCRUDBase):
             result = await session.execute(
                 select(Config)
                 .where(Config.id.in_(config_ids))
-                .options(
-                    joinedload(Config.modes),
-                    joinedload(Config.states)
-                )
+                .options(joinedload(Config.modes), joinedload(Config.states))
             )
             all_configs = result.unique().scalars().all()
             # _serialize is synchronous, so NO await
-            config_map = {cfg.id: self.config_crud._serialize(cfg) for cfg in all_configs}
+            config_map = {
+                cfg.id: self.config_crud._serialize(cfg) for cfg in all_configs
+            }
 
         hydrated_loggers = []
         for logger in loggers:
             logger_copy = copy.deepcopy(logger)
             logger_copy["configs"] = [
-                config_map[c["id"]] for c in logger.get("configs", []) if c["id"] in config_map
+                config_map[c["id"]]
+                for c in logger.get("configs", [])
+                if c["id"] in config_map
             ]
             hydrated_loggers.append(logger_copy)
 
         return hydrated_loggers
-
 
     async def hydrate_logger_configs(
         self,
@@ -277,4 +268,3 @@ class LoggerCRUD(CachedAsyncCRUDBase):
         """
         hydrated_list = await self.hydrate_loggers_configs(session, [logger])
         return hydrated_list[0] if hydrated_list else logger
-

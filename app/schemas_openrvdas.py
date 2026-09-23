@@ -79,7 +79,7 @@ class ModeOut(ModeBase):
 # Loggers
 # -------------------
 class LoggerBase(BaseModel):
-    id: str = Field(None, max_length=255)
+    id: Optional[str] = Field(None, max_length=255)
 
 
 class LoggerCreate(LoggerBase):
