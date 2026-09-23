@@ -28,7 +28,7 @@ async def add_permissions_to_apikey(
     await session.commit()
 
 
-async def get_permissions_for_apikey(session: AsyncSession, apikey_id: UUID):
+async def get_permissions_for_apikey(session: AsyncSession, apikey_id: str | UUID):
     result = await session.execute(
         select(APIKeyPermission).where(APIKeyPermission.apikey_id == apikey_id)
     )

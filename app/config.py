@@ -27,7 +27,8 @@ class Settings(BaseSettings):
     sendgrid_from_email: Optional[str] = None
 
     # looks for env var DATABASE_URL, if not found it's constructed from postgres vars
-    database_url: Optional[str] = None
+    # (BaseSettings validates defaults, so build_db_url always runs)
+    database_url: str = ""
 
     @field_validator("database_url", mode="before")
     @classmethod

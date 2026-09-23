@@ -38,6 +38,7 @@ mypy = "^1.10"
 types-PyYAML = "^6.0"
 
 [tool.mypy]
+plugins = ["pydantic.mypy"]
 explicit_package_bases = true
 ignore_missing_imports = true
 

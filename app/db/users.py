@@ -86,8 +86,10 @@ async def update_user(
         user.hashed_password = get_password_hash(password)
     if roles is not None:
         role_names = [roles] if isinstance(roles, str) else roles
-        result = await session.execute(select(Role).where(Role.name.in_(role_names)))
-        role_objs = result.scalars().all()
+        role_result = await session.execute(
+            select(Role).where(Role.name.in_(role_names))
+        )
+        role_objs = list(role_result.scalars().all())
         if len(role_objs) != len(role_names):
             missing = set(role_names) - {r.name for r in role_objs}
             raise ValueError(f"Roles not found: {missing}")
