@@ -1,13 +1,13 @@
 import copy
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Union
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models_openrvdas import Config, Logger, Mode
 from app.db.base import CachedAsyncCRUDBase, CacheKey
+from app.models_openrvdas import Config, Logger
 
 
 class ConfigCRUD(CachedAsyncCRUDBase):
@@ -34,7 +34,11 @@ class ConfigCRUD(CachedAsyncCRUDBase):
             "mode_ids": [mode.id for mode in getattr(config, "modes", [])],
             "config_json": config.config_json,
             "states": [
-                {"id": state.id, "logger_id": state.logger_id, "config_id": state.config_id}
+                {
+                    "id": state.id,
+                    "logger_id": state.logger_id,
+                    "config_id": state.config_id,
+                }
                 for state in getattr(config, "states", [])
             ],
         }
@@ -49,8 +53,7 @@ class ConfigCRUD(CachedAsyncCRUDBase):
             configs = copy.deepcopy(cached)
         else:
             result = await session.execute(
-                select(Config)
-                .options(
+                select(Config).options(
                     selectinload(Config.logger),
                     selectinload(Config.states),
                     selectinload(Config.modes),
@@ -105,7 +108,7 @@ class ConfigCRUD(CachedAsyncCRUDBase):
     # ---------- writes ----------
     async def create_config(
         self, session: AsyncSession, return_serialized: bool = True, **data
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], Config, None]:
         config = Config(**data)
         session.add(config)
         await session.flush()
@@ -132,8 +135,8 @@ class ConfigCRUD(CachedAsyncCRUDBase):
         session: AsyncSession,
         config_id: str,
         return_serialized: bool = True,
-        **data
-    ) -> Optional[Dict[str, Any]]:
+        **data,
+    ) -> Union[Dict[str, Any], Config, None]:
         result = await session.execute(select(Config).where(Config.id == config_id))
         config = result.scalar_one_or_none()
         if not config:
@@ -164,7 +167,7 @@ class ConfigCRUD(CachedAsyncCRUDBase):
 
     async def delete_config(
         self, session: AsyncSession, config_id: str, return_serialized: bool = True
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], Config, None]:
         result = await session.execute(
             select(Config)
             .where(Config.id == config_id)
@@ -184,7 +187,6 @@ class ConfigCRUD(CachedAsyncCRUDBase):
 
         return serialized if return_serialized else config
 
-
     # ---------- Hydration ----------
     async def hydrate_config_logger(
         self, session: AsyncSession, config: Dict[str, Any]
@@ -202,7 +204,7 @@ class ConfigCRUD(CachedAsyncCRUDBase):
             if logger_obj:
                 config_copy["logger"] = {
                     "id": logger_obj.id,
-                    "name": logger_obj.name,
+                    "name": logger_obj.id,  # Logger has no separate name; its id is the name
                     "type": getattr(logger_obj, "type", None),
                     # Add any other logger fields you want to expose
                 }

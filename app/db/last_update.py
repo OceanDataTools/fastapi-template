@@ -1,6 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import LastUpdate
+
+from app.models_openrvdas import LastUpdate
+
 
 async def touch_last_update(session: AsyncSession):
     result = await session.execute(
