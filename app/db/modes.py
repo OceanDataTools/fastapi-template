@@ -120,7 +120,9 @@ class ModeCRUD(CachedAsyncCRUDBase):
             all_modes = await self.list_modes(session)
             mode = next((m for m in all_modes if m["active"]), None)
             if mode is None:
-                raise NoResultFound("Active mode not found")
+                # No cruise loaded yet (e.g. right after install): there is
+                # no active mode, which is a normal state, not an error.
+                return None
 
             await self._set(self._key_active(), copy.deepcopy(mode))
 
@@ -142,7 +144,9 @@ class ModeCRUD(CachedAsyncCRUDBase):
             all_modes = await self.list_modes(session)
             mode = next((m for m in all_modes if m["default"]), None)
             if mode is None:
-                raise NoResultFound("Default mode not found")
+                # No cruise loaded yet (e.g. right after install): there is
+                # no default mode, which is a normal state, not an error.
+                return None
 
             await self._set(self._key_default(), copy.deepcopy(mode))
 
