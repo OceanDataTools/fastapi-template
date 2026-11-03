@@ -86,6 +86,11 @@ class AsyncFastAPIServerAPI:
     async def get_configuration(self):
         async def _inner(session):
             cruise = await crud_cruise.get_cruise(session)
+            if not cruise:
+                # No cruise definition loaded yet. Return None, as the Django
+                # and SQLite ServerAPIs do, so LoggerManager can tell this
+                # apart from a loaded cruise and wait quietly.
+                return None
             active_mode = await crud_modes.get_active_mode(session, hydrate_configs=True)
             default_mode = await crud_modes.get_default_mode(session, hydrate_configs=True)
             modes = await crud_modes.list_modes(session, hydrate_configs=True)
@@ -187,6 +192,8 @@ class AsyncFastAPIServerAPI:
                 mode = await crud_modes.get_active_mode(session, hydrate_configs=True)
             else:
                 mode = await crud_modes.get_mode(session, mode_id, hydrate_configs=True)
+            if not mode:
+                raise KeyError("No active mode - is a cruise definition loaded?")
             logger = await crud_loggers.get_logger(session, logger_id, hydrate_configs=True)
             if not logger:
                 raise KeyError(f"Logger {logger_id} not found")
