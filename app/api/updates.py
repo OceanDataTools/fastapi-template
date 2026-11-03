@@ -32,7 +32,11 @@ def _cds_url() -> str:
 
 async def _db_poll_loop(websocket: WebSocket) -> None:
     """Poll LastUpdate table; push change events to the client."""
-    last_ts = None
+    # Sentinel distinct from None: on a fresh install there is no LastUpdate
+    # row, so ts is None on every poll. Using None as the "first pass" marker
+    # made that look like a change each time and sent "update" every 0.5 s.
+    unset = object()
+    last_ts: object = unset
 
     while True:
         try:
@@ -47,7 +51,7 @@ async def _db_poll_loop(websocket: WebSocket) -> None:
             await asyncio.sleep(0.5)
             continue
 
-        if last_ts is None or ts != last_ts:
+        if last_ts is unset or ts != last_ts:
             last_ts = ts
             try:
                 await websocket.send_json({"type": "update"})
