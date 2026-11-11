@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import jwt
-from fastapi import Depends, HTTPException, Request, Security
+from fastapi import Depends, HTTPException, Request, Security, WebSocket, status
 from fastapi.security import APIKeyHeader, HTTPBearer, OAuth2PasswordBearer
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.apikeys import get_apikey_by_header, get_permissions_for_apikey
 from app.db.users import get_user_by_username
-from app.models import User
+from app.models import APIKey, User
 from app.utils import verify_password
 
 SECRET_KEY = settings.secret_key
@@ -176,3 +176,112 @@ def apikey_or_jwt_required(
         raise HTTPException(status_code=401, detail="No authentication provided")
 
     return apikey_or_jwt_checker
+
+
+# ---------------------------------------------------------------------------
+# WebSocket authentication
+# ---------------------------------------------------------------------------
+
+# Pseudo-method stored in APIKeyPermission.method for WebSocket routes, which
+# have no HTTP method of their own.
+WEBSOCKET_METHOD = "WEBSOCKET"
+
+
+def accepts_apikey(endpoint):
+    """Mark a WebSocket endpoint as accepting API keys.
+
+    Marked endpoints are listed by GET /api/v1/apikeys/routes with the
+    WEBSOCKET method, so keys can be granted access to them. Apply it below
+    the @router.websocket(...) decorator.
+    """
+    endpoint.accepts_apikey = True
+    return endpoint
+
+
+async def authenticate_websocket(
+    websocket: WebSocket,
+    route: str,
+    allow_apikey: bool = False,
+) -> Optional[Union[User, APIKey]]:
+    """Authenticate a WebSocket handshake before it is accepted.
+
+    Browsers can't set headers on a WebSocket, so credentials are taken from
+    the query string as well as from headers:
+
+      JWT access token:  ?token=<jwt>      or  Authorization: Bearer <jwt>
+      API key:           ?api_key=<key>    or  X-API-Key: <key>
+
+    A JWT must be an access (not refresh) token for a user who still exists,
+    isn't disabled and has at least one role. An API key (only when
+    allow_apikey is True) must be active, belong to an enabled user, and
+    carry a (route, WEBSOCKET) permission.
+
+    Returns the authenticated User or APIKey. On failure, closes the socket
+    with WS_1008_POLICY_VIOLATION and returns None; the caller should then
+    simply return.
+    """
+    from app.db.session import AsyncSessionLocal
+
+    token = websocket.query_params.get("token")
+    if not token:
+        auth_header = websocket.headers.get("authorization", "")
+        scheme, _, credentials = auth_header.partition(" ")
+        if scheme.lower() == "bearer" and credentials:
+            token = credentials.strip()
+
+    apikey_value = websocket.query_params.get("api_key") or websocket.headers.get(
+        "x-api-key"
+    )
+
+    principal: Optional[Union[User, APIKey]] = None
+
+    # Exactly one credential is accepted; API keys only where allowed.
+    if token and not apikey_value:
+        principal = await _authenticate_websocket_jwt(AsyncSessionLocal, token)
+    elif apikey_value and not token and allow_apikey:
+        principal = await _authenticate_websocket_apikey(
+            AsyncSessionLocal, apikey_value, route
+        )
+
+    if principal is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+    return principal
+
+
+async def _authenticate_websocket_jwt(session_factory, token: str) -> Optional[User]:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.PyJWTError:
+        return None
+
+    username = payload.get("sub")
+    if not username or payload.get("type") == "refresh":
+        return None
+
+    async with session_factory() as session:
+        user = await get_user_by_username(session, username)
+
+    if user is None or user.disabled or not user.roles:
+        return None
+    return user
+
+
+async def _authenticate_websocket_apikey(
+    session_factory, apikey_value: str, route: str
+) -> Optional[APIKey]:
+    async with session_factory() as session:
+        apikey = await get_apikey_by_header(session, apikey_value)
+        if apikey is None or not apikey.is_active:
+            return None
+
+        owner = await session.get(User, apikey.user_id)
+        if owner is None or owner.disabled:
+            return None
+
+        perms = await get_permissions_for_apikey(session, apikey.id)
+
+    if not any(
+        perm.route == route and perm.method == WEBSOCKET_METHOD for perm in perms
+    ):
+        return None
+    return apikey
