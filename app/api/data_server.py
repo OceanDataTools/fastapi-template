@@ -1,36 +1,57 @@
 import asyncio
+import json
 
-import jwt
 import websockets
-from fastapi import APIRouter, Query, WebSocket, status
+from fastapi import APIRouter, WebSocket
 from fastapi.websockets import WebSocketState
 
-from app.auth import ALGORITHM, SECRET_KEY
+from app.auth import accepts_apikey, authenticate_websocket
 from app.config import settings
 
 router = APIRouter(prefix="/api/v1/ws", tags=["Data Server"])
 
+DATA_SERVER_ROUTE = "/api/v1/ws/data-server"
+
+# Reply sent instead of forwarding a client 'publish' to the CDS. Loggers
+# publish to the CachedDataServer directly on localhost; clients reaching it
+# through this proxy are on other machines and only read.
+_PUBLISH_FORBIDDEN = json.dumps(
+    {
+        "type": "publish",
+        "status": 403,
+        "message": "Publishing to the CachedDataServer is not permitted "
+        "through this proxy",
+    }
+)
+
+
+def _is_publish(message: str) -> bool:
+    try:
+        request = json.loads(message)
+    except ValueError:
+        return False
+    return isinstance(request, dict) and request.get("type") == "publish"
+
 
 @router.websocket("/data-server")
-async def websocket_data_server_proxy(
-    websocket: WebSocket,
-    token: str = Query(...),
-):
-    """Authenticated WebSocket proxy to the CachedDataServer.
+@accepts_apikey
+async def websocket_data_server_proxy(websocket: WebSocket):
+    """Authenticated, read-only WebSocket proxy to the CachedDataServer.
 
-    Browsers cannot set custom headers on WebSocket connections, so the JWT
-    is passed as a query parameter: ws://<host>/api/v1/ws/data-server?token=<jwt>
+    Accepts either a JWT access token or an API key with the WEBSOCKET
+    permission on this route:
 
-    Once authenticated, all JSON messages are forwarded transparently in both
-    directions, preserving the full CachedDataServer subscribe/ready/data protocol.
+      ws://<host>/api/v1/ws/data-server?token=<jwt>
+      ws://<host>/api/v1/ws/data-server?api_key=<key>   (or X-API-Key header)
+
+    Once authenticated, JSON messages are forwarded in both directions,
+    preserving the CachedDataServer subscribe/ready/data protocol, except
+    that 'publish' requests are answered with status 403 and not forwarded.
     """
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if not payload.get("sub") or payload.get("type") == "refresh":
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-    except jwt.PyJWTError:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+    if (
+        await authenticate_websocket(websocket, DATA_SERVER_ROUTE, allow_apikey=True)
+        is None
+    ):
         return
 
     await websocket.accept()
@@ -46,6 +67,9 @@ async def websocket_data_server_proxy(
                 try:
                     while True:
                         data = await websocket.receive_text()
+                        if _is_publish(data):
+                            await websocket.send_text(_PUBLISH_FORBIDDEN)
+                            continue
                         await cds_ws.send(data)
                 except Exception:
                     pass
