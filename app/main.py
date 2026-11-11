@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, APIWebSocketRoute
 
 from app.api import (
     apikeys,
@@ -24,6 +24,7 @@ from app.api import (
     updates,
     users,
 )
+from app.auth import WEBSOCKET_METHOD
 from app.config import settings
 from app.deps import get_current_user
 from async_fastapi_server_api import AsyncFastAPIServerAPI
@@ -108,6 +109,20 @@ async def list_routes(current_user=Depends(get_current_user)):
 
     routes = []
     for route in app.routes:
+        # WebSocket endpoints authenticate inside the handler rather than via
+        # a dependency, so they opt in with the @accepts_apikey marker.
+        if isinstance(route, APIWebSocketRoute):
+            if getattr(route.endpoint, "accepts_apikey", False):
+                routes.append(
+                    {
+                        "route": route.path,
+                        "methods": [WEBSOCKET_METHOD],
+                        "name": route.name,
+                        "summary": None,
+                    }
+                )
+            continue
+
         if not isinstance(route, APIRoute):
             continue
 

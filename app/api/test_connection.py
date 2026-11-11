@@ -6,12 +6,11 @@ import sys
 import threading
 from os.path import dirname, realpath
 
-import jwt
 import yaml
-from fastapi import APIRouter, Query, WebSocket, status
+from fastapi import APIRouter, WebSocket
 from fastapi.websockets import WebSocketState
 
-from app.auth import ALGORITHM, SECRET_KEY
+from app.auth import authenticate_websocket
 
 sys.path.insert(0, dirname(dirname(dirname(dirname(realpath(__file__))))))
 
@@ -37,6 +36,8 @@ except ImportError:
     UDPReader = SocketReader = None  # type: ignore[assignment,misc]
 
 router = APIRouter(prefix="/api/v1/ws", tags=["Test Connection"])
+
+TEST_CONNECTION_ROUTE = "/api/v1/ws/test-connection"
 
 _READER_CLASSES: dict = (
     {}
@@ -71,10 +72,7 @@ def _instantiate_reader(config: dict):
 
 
 @router.websocket("/test-connection")
-async def websocket_test_connection(
-    websocket: WebSocket,
-    token: str = Query(...),
-):
+async def websocket_test_connection(websocket: WebSocket):
     """WebSocket endpoint for live-streaming records from a reader.
 
     Protocol:
@@ -85,13 +83,9 @@ async def websocket_test_connection(
       Client → {"action": "stop"}
       Server → {"type": "status",  "message": "stopped"}
     """
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if not payload.get("sub") or payload.get("type") == "refresh":
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-    except jwt.PyJWTError:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+    # JWT only: this endpoint runs reader code on the server, so it is not
+    # offered to API keys.
+    if await authenticate_websocket(websocket, TEST_CONNECTION_ROUTE) is None:
         return
 
     await websocket.accept()

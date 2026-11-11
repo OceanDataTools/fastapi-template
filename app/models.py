@@ -125,10 +125,14 @@ class APIKey(Base):
     @property
     def is_expired(self) -> bool:
         """Returns True if the key is past expiration."""
-        return (
-            self.expires_at is not None
-            and datetime.now(timezone.utc) >= self.expires_at
-        )
+        if self.expires_at is None:
+            return False
+        expires_at = self.expires_at
+        # SQLite doesn't store timezones, so values read back are naive even
+        # though the column is timezone-aware; they were written as UTC.
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) >= expires_at
 
     @property
     def is_active(self) -> bool:
