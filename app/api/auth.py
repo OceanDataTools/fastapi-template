@@ -26,6 +26,7 @@ from app.auth import (
 )
 from app.config import settings
 from app.db.auth import create_refresh_token, get_refresh_token, revoke_refresh_token
+from app.db.users import create_user
 from app.deps import get_async_session
 from app.models import PasswordResetToken, User
 from app.schemas import ForgotPasswordSchema, RegisterUserSchema, ResetPasswordSchema
@@ -45,16 +46,16 @@ async def register_user(
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already registered")
 
-    hashed_password = get_password_hash(user.password)
-    new_user = User(
+    # New accounts get the "user" role. Without a role, every authenticated
+    # endpoint refuses them ("User has no roles assigned").
+    new_user = await create_user(
+        session,
         username=user.username,
         full_name=user.full_name,
         email=user.email or "",
-        hashed_password=hashed_password,
+        hashed_password=get_password_hash(user.password),
+        roles="user",
     )
-    session.add(new_user)
-    await session.commit()
-    await session.refresh(new_user)
     return {
         "username": new_user.username,
         "full_name": new_user.full_name,

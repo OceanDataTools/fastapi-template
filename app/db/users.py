@@ -28,7 +28,7 @@ async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]
 async def create_user(
     session: AsyncSession,
     username: str,
-    full_name: str,
+    full_name: Optional[str],
     email: str,
     hashed_password: str,
     roles: Union[str, List[str]] = "user",
