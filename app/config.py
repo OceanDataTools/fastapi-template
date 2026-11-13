@@ -17,11 +17,13 @@ class Settings(BaseSettings):
 
     origins: List = ["http://localhost:5173"]
     secret_key: str
-    access_token_expire_minutes: int
-    refresh_token_expire_days: int
-    environment: str
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
+    # "Development" enables uvicorn --reload and non-secure cookies; default to
+    # the safe choice when nothing is configured (e.g. a bare container).
+    environment: str = "Production"
 
-    frontend_url: str
+    frontend_url: str = "http://localhost:5173"
 
     sendgrid_api_key: Optional[str] = None
     sendgrid_from_email: Optional[str] = None
