@@ -45,6 +45,20 @@ poetry run alembic revision --autogenerate -m "description"
 
 **Important:** `alembic/env.py` imports models via `import app.models`. When adding new model files, import them in `env.py` after the existing import. New models must inherit from the same `Base` class in `app/models.py`.
 
+## Tests
+
+```bash
+# Default: temp SQLite file, schema via Base.metadata.create_all
+poetry run pytest
+
+# Against PostgreSQL: creates a throwaway test_<random> DB on that server,
+# builds the schema with `alembic upgrade head`, drops it afterwards
+docker run -d --rm --name pg-test -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16
+TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres poetry run pytest
+```
+
+Mark Postgres-only tests with `@pytest.mark.postgres` (skipped on the SQLite run); no `conftest.py` edits needed. `tests/test_postgres.py` checks that migrations match `app/models.py` and that timestamptz round-trips. CI runs the suite on both backends.
+
 ## Linting & Formatting
 
 ```bash
