@@ -39,7 +39,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(apikeys.router)
+# Routers registered on the app. list_routes() walks these rather than
+# app.routes: from FastAPI 0.137 on, include_router() adds a single
+# _IncludedRouter object to app.routes instead of the individual APIRoutes.
+# Each router sets its full prefix in APIRouter(prefix=...) and includes no
+# sub-routers, so router.routes already carries the complete paths.
+INCLUDED_ROUTERS = [
+    apikeys.router,
+    auth.router,
+    examples.router,
+    profile.router,
+    users.router,
+]
+
+for _router in INCLUDED_ROUTERS:
+    app.include_router(_router)
 
 
 @app.get("/api/v1/apikeys/routes", tags=["API Keys"])
@@ -58,7 +72,7 @@ async def list_routes(current_user=Depends(get_current_user)):
         return False
 
     routes = []
-    for route in app.routes:
+    for route in (r for router in INCLUDED_ROUTERS for r in router.routes):
         if not isinstance(route, APIRoute):
             continue
 
@@ -81,9 +95,3 @@ async def list_routes(current_user=Depends(get_current_user)):
         )
 
     return routes
-
-
-app.include_router(auth.router)
-app.include_router(examples.router)
-app.include_router(profile.router)
-app.include_router(users.router)
