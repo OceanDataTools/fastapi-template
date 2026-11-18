@@ -11,6 +11,12 @@ services:
     volumes:
       - timescale_data:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER:-postgres}\" -d postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
     profiles:
       - timescale-db
 
@@ -41,7 +47,8 @@ services:
       - .:/app
       - /app/__pycache__
     depends_on:
-      - timescaledb
+      timescaledb:
+        condition: service_healthy
     profiles:
       - timescale-db
 

@@ -1,70 +1,45 @@
 #!/usr/bin/env bash
-set -e
+# Container/local entrypoint: wait for the DB, run migrations, start uvicorn.
+#
+# Configuration comes from the environment, falling back to ./.env (read by
+# pydantic-settings in app/config.py). Variables already set in the
+# environment always win over .env; this script never exports .env itself.
+#
+# Optional:
+#   RUN_MIGRATIONS=false   skip `alembic upgrade head` (e.g. run it as a
+#                          separate job / init container instead)
+#   DB_WAIT_TIMEOUT=60     seconds to wait for the database before failing
+set -eo pipefail
 
-START_DIR="$(pwd)"
-
-# --- Ensure we’re in the script’s directory (project root) ---
+# --- Ensure we're in the script's directory (project root) ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-export $(grep -v '^#' .env | xargs)
-
-if [ -n "$DB_HOST" ]; then
-    echo "Waiting for database at $DB_HOST:$DB_PORT..."
-    while ! nc -z "$DB_HOST" "$DB_PORT"; do
-        echo -n "."
-        sleep 1
-    done
-    echo "Database is ready!"
-
-    echo "Ensuring database '$POSTGRES_DB' exists..."
-    poetry run python3 - <<'PYTHON_EOF'
-import os
-import asyncio
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy import text
-from sqlalchemy.exc import ProgrammingError
-import asyncpg.exceptions
-
-db_name = os.getenv("POSTGRES_DB")
-db_url = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/postgres"
-
-engine = create_async_engine(db_url, future=True)
-
-async def create_db():
-    async with engine.connect() as conn:
-        # Ensure autocommit
-        await conn.run_sync(lambda sync_conn: sync_conn.execution_options(isolation_level="AUTOCOMMIT"))
-        try:
-            await conn.run_sync(lambda sync_conn: sync_conn.execute(text(f'CREATE DATABASE "{db_name}"')))
-            print(f"Database '{db_name}' created.")
-        except ProgrammingError as e:
-            # Catch duplicate DB error and ignore
-            if "already exists" in str(e):
-                print(f"Skipping DB creation, '{db_name}' already exists.")
-            else:
-                raise
-    await engine.dispose()
-
-asyncio.run(create_db())
-PYTHON_EOF
+# Use poetry when available (local dev); in the image deps are installed
+# into the system interpreter, so plain `python` works too.
+if command -v poetry >/dev/null 2>&1; then
+  RUN=(poetry run)
 else
-    if [ ! -f "./db.sqlite3" ]; then
-        echo "Creating SQLite database file..."
-        touch ./db.sqlite3
-    fi
+  RUN=()
 fi
 
-echo "Running Alembic migrations..."
-poetry run alembic upgrade head
+"${RUN[@]}" python -m app.scripts.wait_for_db
 
-# Default command (can be overridden via CMD)
-CMD="uvicorn app.main:app --host 0.0.0.0 --port 8000"
+if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
+  echo "Running Alembic migrations..."
+  "${RUN[@]}" alembic upgrade head
+else
+  echo "RUN_MIGRATIONS=${RUN_MIGRATIONS}; skipping migrations."
+fi
+
+ENVIRONMENT="$("${RUN[@]}" python -c 'from app.config import settings; print(settings.environment)')"
+
+CMD=(uvicorn app.main:app --host 0.0.0.0 --port 8000)
 
 if [ "$ENVIRONMENT" = "Development" ]; then
   echo "Starting in Development mode with auto-reload..."
-  exec poetry run $CMD --reload
+  exec "${RUN[@]}" "${CMD[@]}" --reload
 else
   echo "Starting in Production mode..."
-  exec poetry run $CMD
+  exec "${RUN[@]}" "${CMD[@]}"
 fi

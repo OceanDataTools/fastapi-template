@@ -22,7 +22,6 @@ config = context.config
 fileConfig(config.config_file_name)
 
 DATABASE_URL = settings.database_url
-print(DATABASE_URL)
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 target_metadata = Base.metadata

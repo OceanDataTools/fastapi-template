@@ -22,6 +22,17 @@ FastAPI-based backend providing JWT + API key authentication and user management
 poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+### Docker image
+
+The image contains no `.env` or secrets (see `.dockerignore`); config is supplied at runtime. Real environment variables always take precedence over a bind-mounted `.env` (pydantic-settings reads `.env` itself; `entrypoint.sh` never exports it). Only `SECRET_KEY` and `DATABASE_URL` (or the `POSTGRES_*`/`DB_*` vars) are required.
+
+```bash
+docker build -t api .
+docker run -e DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/db -e SECRET_KEY=... api
+```
+
+`entrypoint.sh` runs `app/scripts/wait_for_db.py` (retries `SELECT 1` with backoff, creates the target Postgres DB if missing, skipped for SQLite), then `alembic upgrade head`, then uvicorn (`--reload` when `ENVIRONMENT=Development`). Optional runtime vars: `DB_WAIT_TIMEOUT` (seconds, default 60) and `RUN_MIGRATIONS=false` (to run migrations as a separate job/init container).
+
 ## Database Migrations
 
 ```bash
@@ -33,6 +44,20 @@ poetry run alembic revision --autogenerate -m "description"
 ```
 
 **Important:** `alembic/env.py` imports models via `import app.models`. When adding new model files, import them in `env.py` after the existing import. New models must inherit from the same `Base` class in `app/models.py`.
+
+## Tests
+
+```bash
+# Default: temp SQLite file, schema via Base.metadata.create_all
+poetry run pytest
+
+# Against PostgreSQL: creates a throwaway test_<random> DB on that server,
+# builds the schema with `alembic upgrade head`, drops it afterwards
+docker run -d --rm --name pg-test -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16
+TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres poetry run pytest
+```
+
+Mark Postgres-only tests with `@pytest.mark.postgres` (skipped on the SQLite run); no `conftest.py` edits needed. `tests/test_postgres.py` checks that migrations match `app/models.py` and that timestamptz round-trips. CI runs the suite on both backends.
 
 ## Linting & Formatting
 
