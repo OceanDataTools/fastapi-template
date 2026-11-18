@@ -84,7 +84,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(apikeys.router)
+# Routers registered on the app. list_routes() walks these rather than
+# app.routes: from FastAPI 0.137 on, include_router() adds a single
+# _IncludedRouter object to app.routes instead of the individual
+# APIRoute/APIWebSocketRoute objects. Each router sets its full prefix in
+# APIRouter(prefix=...) (or uses absolute paths) and includes no sub-routers,
+# so router.routes already carries the complete paths.
+INCLUDED_ROUTERS = [
+    apikeys.router,
+    auth.router,
+    # examples.router,
+    profile.router,
+    users.router,
+    # OpenRVDAS routes
+    data_server.router,
+    configuration.router,
+    connection.router,
+    cruise.router,
+    modes.router,
+    loggers.router,
+    configs.router,
+    updates.router,
+    test_connection.router,
+]
+
+for _router in INCLUDED_ROUTERS:
+    app.include_router(_router)
 
 
 @app.get("/api/v1/version", tags=["Version"])
@@ -108,7 +133,7 @@ async def list_routes(current_user=Depends(get_current_user)):
         return False
 
     routes = []
-    for route in app.routes:
+    for route in (r for router in INCLUDED_ROUTERS for r in router.routes):
         # WebSocket endpoints authenticate inside the handler rather than via
         # a dependency, so they opt in with the @accepts_apikey marker.
         if isinstance(route, APIWebSocketRoute):
@@ -145,20 +170,3 @@ async def list_routes(current_user=Depends(get_current_user)):
         )
 
     return routes
-
-
-app.include_router(auth.router)
-# app.include_router(examples.router)
-app.include_router(profile.router)
-app.include_router(users.router)
-
-# OpenRVDAS routes
-app.include_router(data_server.router)
-app.include_router(configuration.router)
-app.include_router(connection.router)
-app.include_router(cruise.router)
-app.include_router(modes.router)
-app.include_router(loggers.router)
-app.include_router(configs.router)
-app.include_router(updates.router)
-app.include_router(test_connection.router)
